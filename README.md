@@ -68,10 +68,6 @@ app/src/main/assets/bundle/  导出完整更新包时附带的电脑端更新器
 
 完整说明见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
 
-## 测试状态
-
-1.0.3 已通过本地 Gradle 构建、APK 签名和版本号核验，签名证书与 1.0.0–1.0.2 一致，可以覆盖升级。核心差分逻辑在电脑 JVM 上用合成的 E5 / MU300 发行包做过测试，SSH 流程做过本地冒烟测试。本轮没有在模拟器上测试，实机测试由作者在手机上完成。
-
 ## 链接
 
 - GitHub 主页：<https://github.com/linote99>
