@@ -1,0 +1,9 @@
+# Device-side runtime and desktop updater files are hashed (assets/bundle/files.json)
+# and must stay byte-identical on every platform: no line-ending conversion.
+app/src/main/assets/** -text
+
+# Gradle wrapper
+gradlew text eol=lf
+*.bat text eol=crlf
+*.jar binary
+*.png binary

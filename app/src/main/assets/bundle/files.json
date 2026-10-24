@@ -1,0 +1,19 @@
+{
+ "protocol": 1,
+ "files": {
+  "OpenWrt-Updater.py": "a03fb317281014e422b83582d2fc95501a384961c3dd9c70227726529a615384",
+  "backend/boot.py": "5e33608777082aaa6993f9ddde2e35850d1907bb22936b78d79975ce8d258587",
+  "backend/errors.js": "22c19598540bc4b68a2e2163ba9a94c984d325864549e1caebe0e314e2b4cb91",
+  "backend/lz4raw-aarch64.so": "1ee6ed4929b19be39e607e9bcfb48a3402a7008ced54bf74e34071596d900bde",
+  "backend/ota_bundle.py": "304f1e85add0e7d82746c32cb840862d49754568ccb456da42ca3106083fc853",
+  "backend/ota_desktop.py": "6d9ed318dc9a7896f0a188b824914587b06640ea6336fe27c070974208fb25f0",
+  "backend/ota_engine.py": "ab627a515031580f8da441df9ca437780ffadab9cab104abf0440861f1d2a7eb",
+  "backend/ota_package.py": "8ef2e3023f6cc41c4ce0822a727327d4d4ee5c2f17ce9dd16c12f56ba109991b",
+  "backend/ota_runtime.py": "15ef219d5f664c5efd9f02eaa244c077ffdf38a8af6ac6a0c9b46722252e8360",
+  "backend/proxy.sh": "80839c4e52bd251c027e6c409a46c52c478acb6311a7720945b49fa5ca5db327",
+  "backend/rpc.py": "eddabd072ac88bc02493fc90b4b3b9235b099a971d10f99e99c9a1fb393a92cd",
+  "backend/unisoc-ota.js": "87072c44c8e026eff8c62c405c7f339b99d9114247830afe454a9be0e97489fc",
+  "backend/unisoc-ota.json": "696a533e918368dcf009855b76fa9388ff3311656abc161a12cbaf5564a04c42",
+  "backend/__init__.py": "4227d63763e764fd2de7fc2bc13e474ae5de33176fb57aa0fd51cbb4ad80b88c"
+ }
+}
