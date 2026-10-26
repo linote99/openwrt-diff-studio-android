@@ -118,7 +118,7 @@ def bootstrap(runtime, busybox):
               'export UNISOC_OTA_ROOT=/target UNISOC_OTA_RAM=/ UNISOC_OTA_LIVE=1 PYTHONHOME=/usr',
               'case "$command" in',
               ' inspect) exec "$bb" chroot "$root" /usr/bin/python3 /ota/engine.py inspect "/target$patch" --root /target ;;',
-              ' start) exec "$bb" chroot "$root" /usr/bin/python3 /ota/rpc.py start "/target$patch" ;;',
+              ' start) exec "$bb" chroot "$root" /usr/bin/python3 /ota/rpc.py start "/target$patch" "$id" ;;',
               ' status) exec "$bb" chroot "$root" /usr/bin/python3 /ota/rpc.py status ;;',
               ' *) exit 2 ;;', 'esac']
     return ('\n'.join(lines)+'\n').encode()

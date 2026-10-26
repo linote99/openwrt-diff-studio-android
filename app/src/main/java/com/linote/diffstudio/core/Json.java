@@ -24,7 +24,19 @@ public final class Json {
     }
 
     public static Object parse(String s) {
+        return parse(s, false);
+    }
+
+    /** json.loads(raw, object_pairs_hook=_unique) from release_index.py: duplicate keys are rejected. */
+    public static Object parseUnique(byte[] data) {
+        if (data.length >= 3 && (data[0] & 0xff) == 0xef && (data[1] & 0xff) == 0xbb && (data[2] & 0xff) == 0xbf)
+            data = java.util.Arrays.copyOfRange(data, 3, data.length);
+        return parse(Py.decodeUtf8Strict(data), true);
+    }
+
+    private static Object parse(String s, boolean unique) {
         Parser p = new Parser(s);
+        p.unique = unique;
         p.ws();
         Object v = p.value();
         p.ws();
@@ -35,6 +47,7 @@ public final class Json {
     private static final class Parser {
         final String s;
         int i;
+        boolean unique;
 
         Parser(String s) { this.s = s; }
 
@@ -156,6 +169,7 @@ public final class Json {
                 i++;
                 ws();
                 Object v = value();
+                if (unique && m.containsKey(k)) throw new OtaException("Duplicate release index key / 版本摘要存在重复字段");
                 m.remove(k);
                 m.put(k, v);
                 ws();

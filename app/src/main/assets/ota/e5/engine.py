@@ -33,7 +33,7 @@ HEX = re.compile(r'[0-9a-f]{64}')
 PROTECTED = ('lib/firmware', 'lib/apk', 'usr/lib/opkg', 'usr/lib/apk',
              'opt/e5/vendor', 'opt/e5/firmware', 'opt/e5/nv', 'opt/e5/android',
              'opt/mu300/vendor', 'opt/mu300/firmware', 'opt/mu300/nv',
-             'etc/unisoc-ota', 'etc/uci-defaults')
+             'etc/e5-nv', 'etc/unisoc-ota', 'etc/uci-defaults')
 # Retained as an empty API alias for older desktop imports, not a scope gate.
 OFFLINE_ONLY = ()
 
@@ -111,11 +111,11 @@ def merge_scripts(current, target):
     return out.getvalue()
 
 
-def prepare_runtime(patch):
+def prepare_runtime(patch, root=''):
     """Prepare the very same isolated updater for browser and desktop entry."""
     if not patch.manifest.get('runtime'):
         raise ValueError('Patch has no portable runtime')
-    home = Path('/tmp')/('unisoc-ota-'+patch.id)
+    home = Path(root or '/')/'tmp'/('unisoc-ota-'+patch.id)
     home.mkdir(mode=0o700, exist_ok=True)
     if home.is_symlink() or home.stat().st_uid != 0:
         raise ValueError('Unsafe RAM runtime directory')

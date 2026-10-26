@@ -12,8 +12,8 @@ def main():
     sub = p.add_subparsers(dest='command', required=True)
     for name in ('analyze', 'generate'):
         q = sub.add_parser(name)
-        q.add_argument('old')
-        q.add_argument('new')
+        q.add_argument('old',help='Old release ZIP/folder or saved .owrt-index.json')
+        q.add_argument('new',help='New complete release ZIP/folder')
         if name == 'generate':
             q.add_argument('output')
     q = sub.add_parser('update')
@@ -21,7 +21,8 @@ def main():
     q.add_argument('--host', required=True)
     args = p.parse_args()
     if args.command != 'update':
-        result = analyze(args.old, args.new, getattr(args, 'output', None))
+        from backend.release_index import index_directory
+        result = analyze(args.old, args.new, getattr(args, 'output', None), index_directory=index_directory())
     else:
         import getpass
         d = Desktop(Path(__file__).parent, lambda *_: None)

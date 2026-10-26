@@ -16,15 +16,16 @@ public final class OtaRuntime {
 
     /** Ordered support sources: engine.py, boot.py, rpc.py, proxy.sh, unisoc-ota.js, errors.js, unisoc-ota.json, lz4raw-aarch64.so */
     public interface SupportFiles {
-        byte[] read(String name) throws IOException;
+        /** family is "e5" or "mu300": each desktop edition ships its own protocol engine. */
+        byte[] read(String family, String name) throws IOException;
     }
 
     public static final String[] TEXT_SUPPORT = {"engine.py", "boot.py", "rpc.py", "proxy.sh", "unisoc-ota.js", "errors.js", "unisoc-ota.json"};
 
-    public static LinkedHashMap<String, byte[]> supportSources(SupportFiles files) throws IOException {
+    public static LinkedHashMap<String, byte[]> supportSources(String family, SupportFiles files) throws IOException {
         LinkedHashMap<String, byte[]> result = new LinkedHashMap<>();
-        for (String name : TEXT_SUPPORT) result.put(name, crlfToLf(files.read(name)));
-        result.put("lz4raw-aarch64.so", files.read("lz4raw-aarch64.so"));
+        for (String name : TEXT_SUPPORT) result.put(name, crlfToLf(files.read(family, name)));
+        result.put("lz4raw-aarch64.so", files.read(family, "lz4raw-aarch64.so"));
         return result;
     }
 
@@ -78,7 +79,7 @@ public final class OtaRuntime {
             }
             if (!added) break;
         }
-        for (Map.Entry<String, byte[]> e : supportSources(files).entrySet()) {
+        for (Map.Entry<String, byte[]> e : supportSources(release.family, files).entrySet()) {
             byte[] content = e.getValue();
             String h = Py.sha256Hex(content);
             extra.put(h, content);
@@ -179,7 +180,7 @@ public final class OtaRuntime {
                 "export UNISOC_OTA_ROOT=/target UNISOC_OTA_RAM=/ UNISOC_OTA_LIVE=1 PYTHONHOME=/usr",
                 "case \"$command\" in",
                 " inspect) exec \"$bb\" chroot \"$root\" /usr/bin/python3 /ota/engine.py inspect \"/target$patch\" --root /target ;;",
-                " start) exec \"$bb\" chroot \"$root\" /usr/bin/python3 /ota/rpc.py start \"/target$patch\" ;;",
+                " start) exec \"$bb\" chroot \"$root\" /usr/bin/python3 /ota/rpc.py start \"/target$patch\" \"$id\" ;;",
                 " status) exec \"$bb\" chroot \"$root\" /usr/bin/python3 /ota/rpc.py status ;;",
                 " *) exit 2 ;;", "esac"};
         for (String s : tail) lines.add(s);

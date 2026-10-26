@@ -111,11 +111,11 @@ def merge_scripts(current, target):
     return out.getvalue()
 
 
-def prepare_runtime(patch):
+def prepare_runtime(patch, root=''):
     """Prepare the very same isolated updater for browser and desktop entry."""
     if not patch.manifest.get('runtime'):
         raise ValueError('Patch has no portable runtime')
-    home = Path('/tmp')/('unisoc-ota-'+patch.id)
+    home = Path(root or '/')/'tmp'/('unisoc-ota-'+patch.id)
     home.mkdir(mode=0o700, exist_ok=True)
     if home.is_symlink() or home.stat().st_uid != 0:
         raise ValueError('Unsafe RAM runtime directory')

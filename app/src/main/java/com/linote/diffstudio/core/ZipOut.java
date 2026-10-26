@@ -22,6 +22,7 @@ public final class ZipOut implements Closeable {
         byte[] name;
         long offset, crc, csize, usize;
         int flags, dosTime, dosDate;
+        int unixMode = -1; // >= 0: create_system=3 with (S_IFREG | mode) << 16, as ota_bundle.write_runtime
     }
 
     private final RandomAccessFile raf;
@@ -67,8 +68,14 @@ public final class ZipOut implements Closeable {
 
     /** archive.open(name, 'w') */
     public OutputStream openEntry(String name) throws IOException {
+        return openEntry(name, -1);
+    }
+
+    /** ZipInfo with create_system=3 and Unix permission bits (ota_bundle.write_runtime). */
+    public OutputStream openEntry(String name, int unixMode) throws IOException {
         if (open) throw new IllegalStateException("Can't write to the ZIP file while there is another write handle open on it.");
         final Rec r = new Rec();
+        r.unixMode = unixMode;
         boolean ascii = name.chars().allMatch(c -> c < 128);
         r.name = name.getBytes(ascii ? StandardCharsets.US_ASCII : StandardCharsets.UTF_8);
         r.flags = ascii ? 0 : 0x800;
@@ -144,7 +151,7 @@ public final class ZipOut implements Closeable {
             for (Rec r : recs) {
                 byte[] h = new byte[46 + r.name.length];
                 le32(h, 0, 0x02014b50);
-                le16(h, 4, 20);           // made by MS-DOS (Python on Windows), version 2.0
+                le16(h, 4, r.unixMode >= 0 ? (3 << 8) | 20 : 20); // Unix, or MS-DOS (Python on Windows), version 2.0
                 le16(h, 6, 20);
                 le16(h, 8, r.flags);
                 le16(h, 10, 8);
@@ -154,7 +161,7 @@ public final class ZipOut implements Closeable {
                 le32(h, 20, r.csize);
                 le32(h, 24, r.usize);
                 le16(h, 28, r.name.length);
-                le32(h, 38, 0600L << 16); // external attributes, as zipfile sets for written entries
+                le32(h, 38, r.unixMode >= 0 ? (0100000L | r.unixMode) << 16 : 0600L << 16); // external attributes
                 le32(h, 42, r.offset);
                 System.arraycopy(r.name, 0, h, 46, r.name.length);
                 raf.write(h);

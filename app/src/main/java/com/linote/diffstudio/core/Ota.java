@@ -25,7 +25,7 @@ public final class Ota {
     public static final String[] PROTECTED = {"lib/firmware", "lib/apk", "usr/lib/opkg", "usr/lib/apk",
             "opt/e5/vendor", "opt/e5/firmware", "opt/e5/nv", "opt/e5/android",
             "opt/mu300/vendor", "opt/mu300/firmware", "opt/mu300/nv",
-            "etc/unisoc-ota", "etc/uci-defaults"};
+            "etc/e5-nv", "etc/unisoc-ota", "etc/uci-defaults"};
 
     public static boolean isHex(Object v) {
         return v instanceof String && HEX.matcher((String) v).matches();

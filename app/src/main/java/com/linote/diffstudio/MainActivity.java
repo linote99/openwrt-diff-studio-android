@@ -42,6 +42,7 @@ import com.linote.diffstudio.core.OtaPackage;
 import com.linote.diffstudio.core.OtaRuntime;
 import com.linote.diffstudio.core.Py;
 import com.linote.diffstudio.core.Release;
+import com.linote.diffstudio.core.ReleaseIndex;
 import com.linote.diffstudio.ssh.Remote;
 
 import java.io.File;
@@ -56,7 +57,7 @@ import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
 
 public final class MainActivity extends Activity {
-    private static final int PICK_OLD = 1, PICK_NEW = 2, PICK_PATCH = 3, SAVE_ZIP = 4, SAVE_OTA = 5;
+    private static final int PICK_OLD = 1, PICK_NEW = 2, PICK_PATCH = 3, SAVE_ZIP = 4, SAVE_OTA = 5, SAVE_INDEX = 6;
     private static final String DEFAULT_E5 = "192.168.9.1", DEFAULT_MU300 = "192.168.77.1";
 
     // ---------------------------------------------------------------- state (survives activity re-creation)
@@ -75,7 +76,10 @@ public final class MainActivity extends Activity {
         Uri oldUri, newUri;
         String oldName = "", newName = "";
         Uri analyzedOld, analyzedNew;
+        boolean analyzedOldIndex;
         OtaPackage.Analysis analysis;
+        File indexPath; // new release's version index saved by the last successful analysis/export
+        File exportIndex; // index file offered in the pending SAVE_INDEX dialog
         boolean showFiles;
         final ModeState studio = new ModeState();
         // updater
@@ -144,6 +148,9 @@ public final class MainActivity extends Activity {
         } else if (Pattern.compile("\\.zip$", Pattern.CASE_INSENSITIVE).matcher(name).find()) {
             S.mode = 0;
             choose(S.oldUri == null ? "old" : "new", uri, name);
+        } else if (Pattern.compile("\\.json$", Pattern.CASE_INSENSITIVE).matcher(name).find()) {
+            S.mode = 0; // a version index can only be the old side
+            choose("old", uri, name);
         }
     }
 
@@ -458,7 +465,8 @@ public final class MainActivity extends Activity {
         h1.setLayoutParams(lp(-1, -2, 6));
         rootCol.addView(h1);
         TextView intro = text(S.mode == 0
-                ? n("点击选择旧版和新版完整 ZIP，分别放入对应框。相同内容只保存一份。", "Select the old and new full ZIPs for their respective boxes. Identical content is stored once.")
+                ? n("旧版可选择完整 ZIP 或已保存的版本摘要，新版请选择完整 ZIP。分析成功后自动保存新版摘要。",
+                "Use an old full ZIP or saved version index, and a new full ZIP. A new index is saved after analysis.")
                 : n("导入可信差异包，连接正在运行 OpenWrt 的设备，先检查再应用。", "Import a trusted patch and connect to a running OpenWrt device. Review before applying."),
                 15, cMuted, false);
         intro.setLayoutParams(lp(-1, -2, 8));
@@ -469,10 +477,15 @@ public final class MainActivity extends Activity {
         c1.setLayoutParams(lp(-1, -2, 18));
         c1.addView(heading("1", S.mode == 0 ? n("选择发行版本", "Select releases") : n("选择补丁与设备", "Select patch and device")));
         if (S.mode == 0) {
-            c1.addView(label(n("旧版完整包", "Old full release")));
-            Button oldP = picker(S.oldName, n("选择 ZIP 文件", "Select ZIP file"), () -> pick(PICK_OLD));
+            c1.addView(label(n("旧版完整包或版本摘要", "Old full release or version index")));
+            Button oldP = picker(S.oldName, n("选择 ZIP 或版本摘要 JSON", "Select ZIP or version index JSON"), () -> pick(PICK_OLD));
             lockable.add(oldP);
             c1.addView(oldP);
+            Button saved = button(n("已保存的版本摘要", "Saved version indexes"), false);
+            saved.setLayoutParams(lp(-1, dp(42), 8));
+            saved.setOnClickListener(v -> savedIndexes());
+            lockable.add(saved);
+            c1.addView(saved);
             TextView arrow = text("↓", 18, cMuted, false);
             arrow.setGravity(Gravity.CENTER);
             arrow.setLayoutParams(lp(-1, -2, 6));
@@ -634,12 +647,14 @@ public final class MainActivity extends Activity {
 
         aboutSection(root, n("使用说明", "How to use"), new String[][]{
                 {n("生成差异包", "Create patch")},
-                {"1", n("在“生成差异包”页分别选择旧版（设备当前运行的版本）和新版完整 ZIP 发行包。支持 E5，以及 MU300 / F50 / V50 / U30Air。",
-                        "On Create patch, select the old full release ZIP (the version the device runs now) and the new one. E5 and MU300 / F50 / V50 / U30Air are supported.")},
+                {"1", n("在“生成差异包”页选择旧版（设备当前运行的版本）和新版完整 ZIP 发行包。旧版也可以用之前保存的版本摘要代替，不必再保留旧版完整包。支持 E5，以及 MU300 / F50 / V50 / U30Air。",
+                        "On Create patch, select the old release (the version the device runs now) and the new full release ZIP. A saved version index can replace the old full ZIP. E5 and MU300 / F50 / V50 / U30Air are supported.")},
                 {"2", n("点击“分析差异”，查看目标设备、版本变化、文件变更和载荷大小；不能生成时会列出原因。",
                         "Tap Analyze to review the target device, version change, changed files and payload size. Blocking reasons are listed if a patch cannot be made.")},
                 {"3", n("点击“导出差异包”保存完整更新包 ZIP（含 update.ota、电脑端更新器和说明），或点击“仅导出 .ota 文件”。",
                         "Tap Export patch to save the complete update ZIP (update.ota, desktop updater and README), or Export .ota only.")},
+                {"4", n("分析成功后，新版的版本摘要（.owrt-index.json）会自动保存在应用内。下次更新时点击“已保存的版本摘要”，即可直接把它用作旧版；也可以导出给电脑版使用，或删除不需要的摘要。",
+                        "After a successful analysis, the new release's version index (.owrt-index.json) is saved in the app. Next time, tap Saved version indexes to use it as the old release, export it for the desktop app, or delete it.")},
                 {n("更新设备", "Update device")},
                 {"1", n("手机连接设备的 Wi-Fi 或 USB 网络共享，在“更新设备”页选择 .ota 差异包。也可以在文件管理器里用本应用直接打开 .ota。",
                         "Connect the phone to the device's Wi-Fi or USB tethering and select the .ota patch on Update device. You can also open an .ota with this app from a file manager.")},
@@ -668,6 +683,8 @@ public final class MainActivity extends Activity {
                         "The device identity is verified between review and apply; review again after switching or resetting the device.")},
                 {"•", n("保存时如果文件名显示被截短，直接保存即可，导出完成后会自动恢复完整文件名和扩展名。",
                         "If the save dialog shortens the file name, just save; the full name and extension are restored after export.")},
+                {"•", n("版本摘要只记录文件清单、软件包版本和校验值，不含系统文件内容，也不代表设备已经更新。旧版摘要必须对应设备当前运行的版本。",
+                        "A version index only records the file list, package versions and checksums. It holds no system files and does not mean the device was updated. The old index must match what the device runs now.")},
                 {"•", n("导出的补丁与电脑版格式相同，也可以用电脑端更新器或在设备网页“系统 > 系统补丁”中导入。",
                         "Exported patches use the desktop format and can also be applied with the desktop updater or in the device web UI (System > System patches).")},
         }, false);
@@ -900,6 +917,29 @@ public final class MainActivity extends Activity {
             setEnabled(exportOta, !y && u.canExport);
             exportOta.setOnClickListener(v -> save(SAVE_OTA, u.suggestedName.replaceAll("(?i)\\.zip$", "") + ".ota"));
             card2.addView(exportOta);
+            if (S.indexPath != null) {
+                LinearLayout ix = col();
+                ix.setBackground(round(mix(cCard, cBg, 0.6f), cBorder, 10));
+                ix.setPadding(dp(12), dp(10), dp(12), dp(12));
+                ix.setLayoutParams(lp(-1, -2, 14));
+                ix.addView(text(n("新版版本摘要已自动保存", "New version index saved"), 14, cFg, true));
+                TextView hint = text(n("下次可将它作为旧版输入；保存摘要不代表设备已完成更新。",
+                        "Use it as the old input next time. Saving an index does not mean the device was updated."), 13, cMuted, false);
+                hint.setLayoutParams(lp(-1, -2, 4));
+                ix.addView(hint);
+                TextView path = text(S.indexPath.getName(), 12, cMuted, false);
+                path.setTypeface(Typeface.MONOSPACE);
+                path.setTextIsSelectable(true);
+                path.setLayoutParams(lp(-1, -2, 6));
+                ix.addView(path);
+                Button ex = button(n("导出版本摘要", "Export version index"), false);
+                ex.setLayoutParams(lp(-1, dp(44), 10));
+                setEnabled(ex, !y);
+                final File idx = S.indexPath;
+                ex.setOnClickListener(v -> saveIndex(idx));
+                ix.addView(ex);
+                card2.addView(ix);
+            }
         }
         Map<String, Object> j = S.mode == 1 ? S.review : null;
         if (j != null) {
@@ -1032,12 +1072,116 @@ public final class MainActivity extends Activity {
         if (progressView != null) progressView.setText(p);
     }
 
+    /** Device runtime files; the protocol engine differs between the E5 and MU300 desktop editions. */
     private OtaRuntime.SupportFiles support() {
-        return name -> {
-            try (InputStream in = getAssets().open("ota/" + name)) {
+        return (family, name) -> {
+            if (!"e5".equals(family) && !"mu300".equals(family)) throw new OtaException("Unsupported device family: " + family);
+            String asset = name.equals("engine.py") ? "ota/" + family + "/engine.py" : "ota/" + name;
+            try (InputStream in = getAssets().open(asset)) {
                 return Py.readAll(in);
             }
         };
+    }
+
+    /** Updater files bundled with an exported patch, matching that family's desktop edition. */
+    private static String bundleAsset(String family, String name) {
+        if (!"e5".equals(family) && !"mu300".equals(family)) throw new OtaException("Unsupported device family: " + family);
+        if (name.equals("files.json")) return "bundle/" + family + "/files.json";
+        if (name.equals("backend/ota_engine.py")) return "ota/" + family + "/engine.py";
+        return "bundle/common/" + name;
+    }
+
+    // ---------------------------------------------------------------- version indexes
+    private void saveIndex(File index) {
+        S.exportIndex = index;
+        save(SAVE_INDEX, index.getName());
+    }
+
+    /** ota_export_index: re-validate the saved index and write its canonical bytes to the chosen document. */
+    private void exportIndex(Uri dest, File index, String intendedName) {
+        run(() -> {
+            if (index == null || !index.isFile()) throw new OtaException("Analyze a compatible release first / 请先完成兼容版本的差异分析");
+            byte[] raw = ReleaseIndex.serialize(ReleaseIndex.readIndex(index));
+            final Uri target = AndroidIo.fixSavedName(this, dest, intendedName);
+            File tmp = new File(AndroidIo.scratch(this), "index-" + System.nanoTime() + ".json");
+            try {
+                try (java.io.FileOutputStream out = new java.io.FileOutputStream(tmp)) {
+                    out.write(raw);
+                }
+                AndroidIo.copyToUri(this, tmp, target);
+            } finally {
+                //noinspection ResultOfMethodCallIgnored
+                tmp.delete();
+            }
+            String shown = AndroidIo.displayName(this, target);
+            boolean extOk = shown.toLowerCase(java.util.Locale.ROOT).endsWith(".json");
+            ui.post(() -> ms(0).notice = n("版本摘要已导出：", "Version index exported: ") + shown
+                    + (extOk ? "" : n("\n当前保存位置不允许修改文件名，请在文件管理器中把扩展名改为 .json。",
+                    "\nThis location does not allow renaming; change the file extension to .json in your file manager.")));
+        });
+    }
+
+    private File[] listIndexes() {
+        File[] files = indexDir().listFiles((d, name) -> name.endsWith(ReleaseIndex.SUFFIX));
+        if (files == null) return new File[0];
+        java.util.Arrays.sort(files, (x, z) -> Long.compare(z.lastModified(), x.lastModified()));
+        return files;
+    }
+
+    private int dialogTheme() {
+        return S.dark ? android.R.style.Theme_DeviceDefault_Dialog_Alert : android.R.style.Theme_DeviceDefault_Light_Dialog_Alert;
+    }
+
+    /** Android counterpart of "打开版本摘要目录": the app-private index folder is managed in-app. */
+    private void savedIndexes() {
+        final File[] files = listIndexes();
+        AlertDialog.Builder b = new AlertDialog.Builder(this, dialogTheme()).setTitle(n("已保存的版本摘要", "Saved version indexes"));
+        if (files.length == 0) {
+            b.setMessage(n("还没有保存的版本摘要。成功分析一次差异后，新版的版本摘要会自动保存在这里。",
+                    "No saved indexes yet. After a successful analysis the new release's index is saved here."));
+        } else {
+            String[] labels = new String[files.length];
+            java.text.DateFormat df = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT);
+            for (int i = 0; i < files.length; i++) {
+                String name = files[i].getName();
+                // OpenWrt-<image_version>-<sha256>.owrt-index.json -> show the version part
+                String label = name.substring(0, name.length() - ReleaseIndex.SUFFIX.length());
+                if (label.startsWith("OpenWrt-")) label = label.substring(8);
+                if (label.length() > 65 && label.charAt(label.length() - 65) == '-') label = label.substring(0, label.length() - 65);
+                labels[i] = label + "\n" + df.format(new java.util.Date(files[i].lastModified())) + " · " + bytes(files[i].length());
+            }
+            b.setItems(labels, (d, which) -> indexActions(files[which]));
+        }
+        b.setNegativeButton(n("关闭", "Close"), null);
+        b.show();
+    }
+
+    private void indexActions(File f) {
+        String[] actions = {n("用作旧版", "Use as old release"), n("导出", "Export"), n("删除", "Delete")};
+        new AlertDialog.Builder(this, dialogTheme())
+                .setTitle(f.getName())
+                .setItems(actions, (d, which) -> {
+                    if (which == 0) choose("old", Uri.fromFile(f), f.getName());
+                    else if (which == 1) saveIndex(f);
+                    else new AlertDialog.Builder(this, dialogTheme())
+                                .setTitle(n("删除此版本摘要？", "Delete this version index?"))
+                                .setMessage(f.getName())
+                                .setPositiveButton(n("删除", "Delete"), (d2, w2) -> {
+                                    //noinspection ResultOfMethodCallIgnored
+                                    f.delete();
+                                    if (S.indexPath != null && S.indexPath.equals(f)) S.indexPath = null;
+                                    if (S.oldUri != null && S.oldUri.equals(Uri.fromFile(f))) {
+                                        S.oldUri = null;
+                                        S.oldName = "";
+                                        S.analysis = null;
+                                    }
+                                    fullRender();
+                                })
+                                .setNegativeButton(n("取消", "Cancel"), null)
+                                .show();
+                })
+                .setNegativeButton(n("取消", "Cancel"), null)
+                .show();
     }
 
     // ---------------------------------------------------------------- pickers
@@ -1045,7 +1189,8 @@ public final class MainActivity extends Activity {
         Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         i.addCategory(Intent.CATEGORY_OPENABLE);
         i.setType("*/*");
-        if (code != PICK_PATCH) i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/zip", "application/x-zip-compressed", "application/octet-stream", "*/*"});
+        if (code == PICK_OLD) i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/zip", "application/x-zip-compressed", "application/json", "application/octet-stream", "*/*"});
+        else if (code != PICK_PATCH) i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/zip", "application/x-zip-compressed", "application/octet-stream", "*/*"});
         try {
             startActivityForResult(i, code);
         } catch (RuntimeException e) {
@@ -1057,7 +1202,7 @@ public final class MainActivity extends Activity {
     private void save(int code, String suggested) {
         Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         i.addCategory(Intent.CATEGORY_OPENABLE);
-        i.setType(code == SAVE_ZIP ? "application/zip" : "application/octet-stream");
+        i.setType(code == SAVE_ZIP ? "application/zip" : code == SAVE_INDEX ? "application/json" : "application/octet-stream");
         i.putExtra(Intent.EXTRA_TITLE, suggested);
         S.saveName = suggested;
         try {
@@ -1074,6 +1219,10 @@ public final class MainActivity extends Activity {
         if (result != RESULT_OK || data == null || data.getData() == null) return;
         Uri uri = data.getData();
         int flags = Intent.FLAG_GRANT_READ_URI_PERMISSION | (code >= SAVE_ZIP ? Intent.FLAG_GRANT_WRITE_URI_PERMISSION : 0);
+        if (code == SAVE_INDEX) {
+            exportIndex(uri, S.exportIndex, S.saveName);
+            return;
+        }
         try {
             getContentResolver().takePersistableUriPermission(uri, flags);
         } catch (RuntimeException ignored) {
@@ -1089,16 +1238,19 @@ public final class MainActivity extends Activity {
 
     /** ge(kind, path) */
     private void choose(String kind, Uri uri, String name) {
-        Pattern want = Pattern.compile(kind.equals("patch") ? "\\.ota$" : "\\.zip$", Pattern.CASE_INSENSITIVE);
+        Pattern want = Pattern.compile(kind.equals("patch") ? "\\.ota$" : kind.equals("old") ? "\\.(zip|json)$" : "\\.zip$", Pattern.CASE_INSENSITIVE);
         ModeState m = ms(kind.equals("patch") ? 1 : 0);
         if (!want.matcher(name).find()) {
-            m.error = kind.equals("patch") ? n("请选择 .ota 差异包。", "Select an .ota patch.") : n("请选择完整 ZIP 发行包。", "Select a full release ZIP.");
+            m.error = kind.equals("patch") ? n("请选择 .ota 差异包。", "Select an .ota patch.")
+                    : kind.equals("old") ? n("请选择旧版 ZIP 或版本摘要 JSON。", "Select an old ZIP or version index JSON.")
+                    : n("新版必须选择完整 ZIP 发行包。", "The new release must be a full ZIP.");
             fullRender();
             return;
         }
         m.error = "";
         S.review = null;
         S.analysis = null;
+        S.indexPath = null;
         m.notice = "";
         S.canReboot = false;
         if (kind.equals("old")) {
@@ -1142,29 +1294,59 @@ public final class MainActivity extends Activity {
     }
 
     // ---------------------------------------------------------------- Diff Studio commands
+    private File indexDir() {
+        return new File(getFilesDir(), "release-indexes");
+    }
+
+    private static boolean isIndex(String name) {
+        return name != null && name.toLowerCase(java.util.Locale.ROOT).endsWith(".json");
+    }
+
+    /** Opens both inputs and runs ota_package.analyze; the old side may be a version index. */
+    private OtaPackage.Analysis analyzeInputs(Uri oldUri, boolean oldIsIndex, Uri newUri, File output) throws IOException {
+        File scratch = AndroidIo.scratch(this);
+        ReleaseIndex.Base index = null;
+        Release.Source a = null;
+        if (oldIsIndex) {
+            InputStream in = getContentResolver().openInputStream(oldUri);
+            if (in == null) throw new OtaException("Cannot open version index");
+            try (InputStream s = in) {
+                index = ReleaseIndex.load(s);
+            }
+        } else {
+            a = AndroidIo.openRelease(this, oldUri, scratch);
+        }
+        Release.Source b;
+        try {
+            b = AndroidIo.openRelease(this, newUri, scratch);
+        } catch (IOException | RuntimeException e) {
+            if (a != null) a.owner.close();
+            throw e;
+        }
+        return OtaPackage.analyze(a, index, b, output, this::onProgress, support(), scratch, indexDir());
+    }
+
     private void analyze() {
         final Uri oldUri = S.oldUri, newUri = S.newUri;
+        final boolean oldIsIndex = isIndex(S.oldName);
+        S.indexPath = null;
+        S.analysis = null;
         run(() -> {
-            File scratch = AndroidIo.scratch(this);
-            Release.Source a = AndroidIo.openRelease(this, oldUri, scratch);
-            Release.Source b;
-            try {
-                b = AndroidIo.openRelease(this, newUri, scratch);
-            } catch (IOException | RuntimeException e) {
-                a.owner.close();
-                throw e;
-            }
-            OtaPackage.Analysis r = OtaPackage.analyze(a, b, null, this::onProgress, support(), scratch);
+            OtaPackage.Analysis r = analyzeInputs(oldUri, oldIsIndex, newUri, null);
             ui.post(() -> {
                 S.analyzedOld = oldUri;
+                S.analyzedOldIndex = oldIsIndex;
                 S.analyzedNew = newUri;
                 S.analysis = r;
+                S.indexPath = r.indexPath;
             });
         });
     }
 
     private void export(Uri dest, boolean bundle, String intendedName) {
         final Uri oldUri = S.analyzedOld, newUri = S.analyzedNew;
+        final boolean oldIsIndex = S.analyzedOldIndex;
+        S.indexPath = null;
         run(() -> {
             if (oldUri == null || newUri == null) throw new OtaException("Analyze the old and new release first");
             // vendor save dialogs may shorten the name and swap the extension (".bin"); restore it first
@@ -1174,20 +1356,14 @@ public final class MainActivity extends Activity {
             if (!dir.mkdirs()) throw new OtaException("Cannot create temporary export directory");
             try {
                 File patch = new File(dir, "update.ota");
-                Release.Source a = AndroidIo.openRelease(this, oldUri, scratch);
-                Release.Source b;
-                try {
-                    b = AndroidIo.openRelease(this, newUri, scratch);
-                } catch (IOException | RuntimeException e) {
-                    a.owner.close();
-                    throw e;
-                }
-                OtaPackage.analyze(a, b, patch, this::onProgress, support(), scratch);
+                OtaPackage.Analysis r = analyzeInputs(oldUri, oldIsIndex, newUri, patch);
+                ui.post(() -> S.indexPath = r.indexPath);
                 File out = patch;
                 if (bundle) {
                     out = new File(dir, "bundle.zip");
                     onProgress("bundle", "README.md");
-                    com.linote.diffstudio.core.Bundle.export(patch, out, name -> getAssets().open("bundle/" + name));
+                    final String family = String.valueOf(r.manifest.get("family"));
+                    com.linote.diffstudio.core.Bundle.export(patch, out, name -> getAssets().open(bundleAsset(family, name)));
                 }
                 AndroidIo.copyToUri(this, out, target);
                 String shown = AndroidIo.displayName(this, target);
@@ -1266,6 +1442,9 @@ public final class MainActivity extends Activity {
                 if (tx != null) {
                     String p = s(tx.get("started")) + " / " + s(tx.get("total"));
                     ui.post(() -> setProgress(p));
+                } else if (job != null && job.get("phase") instanceof String) {
+                    String p = phaseLabel((String) job.get("phase"));
+                    ui.post(() -> setProgress(p));
                 }
                 if (job == null || !"running".equals(job.get("status"))) {
                     again = false;
@@ -1285,6 +1464,17 @@ public final class MainActivity extends Activity {
                 });
             }
         });
+    }
+
+    /** Device job phases reported by the asynchronous start (rpc.py 2026-10-26). */
+    private String phaseLabel(String phase) {
+        switch (phase) {
+            case "queued": return n("已开始，等待设备处理…", "Started; waiting for the device…");
+            case "staging": return n("正在准备更新文件…", "Preparing update files…");
+            case "runtime": return n("正在准备更新…", "Preparing the update…");
+            case "applying": return n("正在更新系统…", "Updating the system…");
+            default: return phase;
+        }
     }
 
     /** we(l): interpret a status result. */

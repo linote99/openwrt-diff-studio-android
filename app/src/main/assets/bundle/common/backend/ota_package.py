@@ -346,13 +346,24 @@ def compare(old, new):
                 removed=sum(o['after'] is None for o in operations)), extra
 
 
-def analyze(old_path, new_path, output=None, progress=lambda *_: None):
+def analyze(old_path, new_path, output=None, progress=lambda *_: None, index_directory=None):
+    if not Path(new_path).is_dir() and Path(new_path).suffix.lower() == '.json':
+        raise ValueError('The new release must be a full package, not a version index / 新版必须选择完整安装包，不能使用版本摘要')
     # Old image is released before decompressing the new one. Only the previous
     # index survives; no pair of multi-GiB roots is retained.
-    with Release(old_path, progress) as old:
-        pass
+    if Path(old_path).suffix.lower() == '.json':
+        from .release_index import load_index
+        old = load_index(old_path)
+    else:
+        with Release(old_path, progress) as old:
+            pass
     with Release(new_path, progress) as new:
         result, extra = compare(old, new)
+        if index_directory is not None and result['can_export']:
+            from .release_index import save_index
+            # compare() includes the updater files actually supplied by this
+            # generator. Keep that target baseline, not stale package defaults.
+            result['index_path'] = str(save_index(new,index_directory))
         if output:
             if result['blockers']:
                 raise ValueError('; '.join(result['blockers'][:12]))

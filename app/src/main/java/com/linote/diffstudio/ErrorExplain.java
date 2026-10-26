@@ -38,7 +38,8 @@ public final class ErrorExplain {
             {Pattern.compile("File changed during update"), "系统文件在写入期间发生变化，本次更新已中止，请检查设备状态。", "A system file changed during the update. The update stopped; check the device status."},
             {Pattern.compile("already exists|Output staging exists"), "输出文件已存在，请选择其他文件名或目录。", "The output file already exists. Choose another filename or directory."},
             {Pattern.compile("Select a single complete release ZIP|full release|Missing release identity|Full release has no"), "无法识别完整发行包或版本信息，请选择该项目的完整发行 ZIP。", "The full release or version information could not be identified. Select a complete release ZIP from this project."},
-            {Pattern.compile("Inspect this patch|Review this device|reviewed patch|Device SSH identity changed"), "检查结果已失效或设备发生变化，请重新连接并检查后再应用。", "The review is stale or the device changed. Connect and review again before applying."},
+            {Pattern.compile("Incomplete patch inspection response"), "补丁检查结果不完整，未开始更新。请更新插件并重新检查补丁。", "Patch inspection is incomplete. No update started. Update the plugin and inspect the patch again."},
+            {Pattern.compile("Inspect this patch|Upload differs|Review this device|reviewed patch|Device SSH identity changed"), "检查结果已失效或设备发生变化，请重新连接并检查后再应用。", "The review is stale or the device changed. Connect and review again before applying."},
             {Pattern.compile("Permission denied|Operation not permitted", Pattern.CASE_INSENSITIVE), "操作权限不足，请检查 root 权限及目标文件系统状态。", "Permission was denied. Check root access and the target filesystem state."},
             {Pattern.compile("Read-only file system|Input/output error", Pattern.CASE_INSENSITIVE), "设备存储无法正常写入，请检查文件系统及存储错误。", "Device storage cannot be written. Check filesystem and storage errors."},
     };

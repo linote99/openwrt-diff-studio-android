@@ -28,6 +28,8 @@ public final class OtaPackage {
         public int files, added, removed;
         public File output;
         public long archiveBytes;
+        /** The new release's version index, saved after a successful compatible analysis. */
+        public File indexPath;
         LinkedHashMap<String, byte[]> extra;
     }
 
@@ -101,7 +103,7 @@ public final class OtaPackage {
     }
 
     @SuppressWarnings("unchecked")
-    public static Analysis compare(Release old, Release neu, OtaRuntime.SupportFiles support) throws IOException {
+    public static Analysis compare(ReleaseIndex.Base old, Release neu, OtaRuntime.SupportFiles support) throws IOException {
         if (!old.family.equals(neu.family)) throw new OtaException("Packages belong to different device families");
         if (!Json.pyEquals(old.meta.get("profile"), neu.meta.get("profile"))) throw new OtaException("Incompatible full releases: profile");
         OtaRuntime.Built built = OtaRuntime.build(neu, support);
@@ -241,12 +243,34 @@ public final class OtaPackage {
      * When output is non-null the verified differential archive is written there.
      */
     @SuppressWarnings("unchecked")
-    public static Analysis analyze(Release.Source oldSrc, Release.Source newSrc, File output, Release.Progress progress,
-                                   OtaRuntime.SupportFiles support, File scratch) throws IOException {
-        Release old = new Release(oldSrc, scratch, progress);
-        old.close(); // entries/meta/packages stay in memory; the scratch image is gone
+    public static Analysis analyze(Release.Source oldSrc, ReleaseIndex.Base oldIndex, Release.Source newSrc, File output,
+                                   Release.Progress progress, OtaRuntime.SupportFiles support, File scratch,
+                                   File indexDirectory) throws IOException {
+        if (newSrc.displayName.toLowerCase(java.util.Locale.ROOT).endsWith(".json")) {
+            newSrc.owner.close();
+            if (oldSrc != null) oldSrc.owner.close();
+            throw new OtaException("The new release must be a full package, not a version index / 新版必须选择完整安装包，不能使用版本摘要");
+        }
+        ReleaseIndex.Base old;
+        if (oldIndex != null) {
+            old = oldIndex;
+        } else {
+            Release full;
+            try {
+                full = new Release(oldSrc, scratch, progress);
+            } catch (IOException | RuntimeException e) {
+                newSrc.owner.close();
+                throw e;
+            }
+            full.close(); // entries/meta/packages stay in memory; the scratch image is gone
+            old = ReleaseIndex.Base.of(full);
+        }
         try (Release neu = new Release(newSrc, scratch, progress)) {
             Analysis result = compare(old, neu, support);
+            if (indexDirectory != null && result.canExport) {
+                // compare() includes the updater files actually supplied by this generator.
+                result.indexPath = ReleaseIndex.saveIndex(neu, indexDirectory);
+            }
             if (output != null) {
                 if (!result.blockers.isEmpty())
                     throw new OtaException(String.join("; ", result.blockers.subList(0, Math.min(12, result.blockers.size()))));

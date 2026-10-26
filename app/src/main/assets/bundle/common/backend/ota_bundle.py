@@ -3,7 +3,31 @@ import os
 from pathlib import Path
 import json
 import hashlib
+import stat
 import zipfile
+
+
+def write_runtime(archive, path, name):
+    """Retain Mac executable bits even when exporting from Windows/NTFS."""
+    info = zipfile.ZipInfo.from_file(path, name)
+    mode = stat.S_IMODE(path.stat().st_mode)
+    app = name.split('/', 1)[0].endswith('.app')
+    mac = app or name.startswith('tools/macos/')
+    with path.open('rb') as stream:
+        magic = stream.read(4) if mac else b''
+        if (app and '/Contents/MacOS/' in name
+                or name == 'tools/macos/backend/openwrt-backend'
+                or mac and magic in (b'\xcf\xfa\xed\xfe', b'\xce\xfa\xed\xfe',
+                                     b'\xfe\xed\xfa\xcf', b'\xfe\xed\xfa\xce',
+                                     b'\xca\xfe\xba\xbe', b'\xbe\xba\xfe\xca')):
+            mode = 0o755
+        info.create_system = 3
+        info.external_attr = (stat.S_IFREG | mode) << 16
+        info.compress_type = zipfile.ZIP_DEFLATED
+        stream.seek(0)
+        with archive.open(info, 'w', force_zip64=True) as output:
+            for block in iter(lambda: stream.read(1 << 20), b''):
+                output.write(block)
 
 
 def export_bundle(patch, output, runtime):
@@ -40,7 +64,7 @@ def export_bundle(patch, output, runtime):
                     dest = name
                 else:
                     continue
-                z.write(runtime / name, dest)
+                write_runtime(z, runtime / name, dest)
             z.writestr('README.md', '# OpenWrt differential OTA\n\n'
                         'Web: import update.ota in System > System patches.\n'
                         'Desktop: extract the complete folder and open OpenWrt-Updater.exe / .app.\n'

@@ -77,19 +77,105 @@ def activate_rpc():
         return {'status': 'warning', 'error': str(error)}
 
 
-def worker(command, path=None, expected_id=None):
-    if path and not os.environ.get('UNISOC_OTA_RAM'):
-        STATE.mkdir(mode=0o700, parents=True, exist_ok=True)
-        with (STATE/'job.lock').open('a') as held:
-            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        with Patch(path) as patch:
+def stage_upload(path, expected_id):
+    """Freeze the reviewed content once, under the inherited admission lock."""
+    candidate = STATE / ('candidate-' + str(time.time_ns()) + '.ota')
+    source = Path(path)
+    before = source.stat()
+    if before.st_size > (2 << 30) or shutil.disk_usage(STATE).free < before.st_size + (16 << 20):
+        raise ValueError('Insufficient staging space or excessive upload size')
+    try:
+        with source.open('rb') as src, candidate.open('xb') as dest:
+            remaining = before.st_size
+            while remaining:
+                block = src.read(min(1 << 20, remaining))
+                if not block:
+                    raise ValueError('Upload changed during staging')
+                dest.write(block)
+                remaining -= len(block)
+            dest.flush()
+            os.fsync(dest.fileno())
+        with Patch(candidate) as patch:
             if patch.id != expected_id:
-                raise ValueError('Upload differs from the reviewed patch')
-            home = prepare_runtime(patch)
-        result = subprocess.run([str(home/'busybox'), 'sh', str(home/'bootstrap.sh'),
-                                 str(path), 'start', str(home)], capture_output=True, text=True)
-        if result.returncode: raise ValueError(result.stderr or result.stdout)
-        return json.loads(result.stdout)
+                raise ValueError('Upload differs from the patch you reviewed; inspect again')
+        frozen = STATE / ('reviewed-' + expected_id + '.ota')
+        os.replace(candidate, frozen)
+        after = source.stat()
+        if (after.st_dev, after.st_ino, after.st_mtime_ns, after.st_size) == (before.st_dev, before.st_ino, before.st_mtime_ns, before.st_size):
+            source.unlink()
+        return frozen
+    finally:
+        candidate.unlink(missing_ok=True)
+
+
+def host_path(path):
+    """Convert a path in the current RAM chroot to its real-root pathname."""
+    return '/' + Path(path).relative_to(ROOT or '/').as_posix()
+
+
+def prepare_apply(path, expected_id, lock_fd):
+    """Prepare asynchronously, then exec the isolated worker without dropping its lock.
+
+    Bootstrap's inspect command is supported by existing patches and performs
+    no writes. Enter _worker directly afterwards: the reviewed ID is already
+    verified, so it cannot be lost by re-entering CLI start with upload.ota.
+    """
+    os.set_inheritable(lock_fd, True)
+    def phase(name):
+        atomic_json(JOB, dict(status='running', command='apply', patch_id=expected_id, phase=name))
+    try:
+        phase('staging')
+        frozen = stage_upload(path, expected_id)
+        phase('runtime')
+        # A bind of /target excludes the host's tmpfs submount. Use PID 1's
+        # real tmp directly, including on the very first desktop bootstrap.
+        ram = bool(os.environ.get('UNISOC_OTA_RAM'))
+        runtime_root = '/proc/1/root' if ram else ROOT
+        with Patch(frozen) as patch:
+            home = prepare_runtime(patch, root=runtime_root)
+        prefix = ['/ota/busybox', 'chroot', '/proc/1/root'] if ram else []
+        real_home = '/' + home.relative_to(runtime_root or '/').as_posix()
+        real_patch = host_path(frozen)
+        result = subprocess.run(prefix + [real_home+'/busybox', 'sh', real_home+'/bootstrap.sh',
+                                real_patch, 'inspect', real_home], capture_output=True, text=True)
+        if result.returncode:
+            raise ValueError(result.stderr or result.stdout)
+        check = json.loads(result.stdout)
+        if not check.get('applicable'):
+            raise ValueError('File conflict or insufficient space')
+        # Only publish the fully prepared runtime. All subsequent status calls
+        # use it, while this same job lock survives the final exec/chroot.
+        (STATE/'active-runtime').write_text(real_home+'/root\n')
+        phase('applying')
+        env = dict(os.environ, UNISOC_OTA_ROOT='/target', UNISOC_OTA_RAM='/',
+                   UNISOC_OTA_LIVE='1', PYTHONHOME='/usr')
+        argv = prefix + [real_home+'/busybox', 'chroot', real_home+'/root',
+                         '/usr/bin/python3', '/ota/rpc.py', '_worker', 'apply', '/target'+real_patch]
+        os.execve(argv[0], argv, env)
+    except Exception as error:
+        atomic_json(JOB, dict(status='failed', command='apply', patch_id=expected_id,
+                             result={'error': str(error)}))
+
+
+def worker(command, path=None, expected_id=None):
+    if path:
+        # No bulk copy, runtime extraction or filesystem inspection in the
+        # HTTP request. The detached child inherits the lock before we reply.
+        STATE.mkdir(mode=0o700, parents=True, exist_ok=True)
+        with (STATE/'job.lock').open('a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            atomic_json(JOB, dict(status='running', command=command,
+                                  patch_id=expected_id, phase='queued'))
+            try:
+                subprocess.Popen([sys.executable, __file__, '_prepare_apply', str(path),
+                                  expected_id, str(lock.fileno())], stdin=subprocess.DEVNULL,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                 start_new_session=True, pass_fds=(lock.fileno(),))
+            except Exception as error:
+                atomic_json(JOB, dict(status='failed', command=command, patch_id=expected_id,
+                                     result={'error': str(error)}))
+                raise
+        return {'status': 'running', 'patch_id': expected_id, 'phase': 'queued'}
     if command == 'rollback' and not os.environ.get('UNISOC_OTA_RAM'):
         import tempfile
         journal = json.loads((STATE/'journal.json').read_text())
@@ -117,42 +203,9 @@ def worker(command, path=None, expected_id=None):
     STATE.mkdir(mode=0o700, exist_ok=True)
     with (STATE / 'job.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        patch_id = None
-        if path:
-            candidate = STATE / ('candidate-' + str(time.time_ns()) + '.ota')
-            source = Path(path)
-            before = source.stat()
-            if before.st_size > (2 << 30) or shutil.disk_usage(STATE).free < before.st_size + (16 << 20):
-                raise ValueError('Insufficient staging space or excessive upload size')
-            try:
-                with source.open('rb') as src, candidate.open('xb') as dest:
-                    remaining = before.st_size
-                    while remaining:
-                        block = src.read(min(1 << 20, remaining))
-                        if not block:
-                            raise ValueError('Upload changed during staging')
-                        dest.write(block)
-                        remaining -= len(block)
-                    dest.flush()
-                    os.fsync(dest.fileno())
-                with Patch(candidate) as patch:
-                    if patch.id != expected_id:
-                        raise ValueError('Upload differs from the patch you reviewed; inspect again')
-                    check = Engine().inspect(patch)
-                    if not check['applicable']:
-                        raise ValueError('File conflict or insufficient space')
-                    frozen = STATE / ('reviewed-' + patch.id + '.ota')
-                    patch_id = patch.id
-                os.replace(candidate, frozen)
-                after = source.stat()
-                if (after.st_dev,after.st_ino,after.st_mtime_ns,after.st_size) == (before.st_dev,before.st_ino,before.st_mtime_ns,before.st_size):
-                    source.unlink()
-                path = str(frozen)
-            finally:
-                candidate.unlink(missing_ok=True)
         # Parent holds the lock until a durable running marker is written, then
         # detaches a process which inherits it. Its close releases the lock.
-        atomic_json(JOB, {'status': 'running', 'command': command, 'patch_id': patch_id})
+        atomic_json(JOB, {'status': 'running', 'command': command, 'patch_id': None})
         subprocess.Popen([sys.executable, __file__, '_worker', command, path or ''],
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL, start_new_session=True,
@@ -183,7 +236,7 @@ def dispatch(method, path=None, review_id=None):
                 else:
                     transaction = result.get('transaction') or {}
                     complete = (transaction.get('status') == 'complete' and transaction.get('id') == result['job'].get('patch_id')) if result['job'].get('command') == 'apply' else transaction.get('status') == 'rolled_back'
-                    result['job'] = dict(status='complete' if complete else 'failed',
+                    result['job'] = dict(result['job'], status='complete' if complete else 'failed',
                                          result={'error': 'Interrupted transaction; recovery status: ' + transaction.get('status', 'unknown')} if not complete else {})
                     atomic_json(JOB, result['job'])
         completed = result['job'].get('completed_boot_id')
@@ -234,6 +287,10 @@ def dispatch(method, path=None, review_id=None):
 
 
 def main():
+    if sys.argv[1:2] == ['_prepare_apply']:
+        path, expected_id, lock_fd = sys.argv[2:5]
+        prepare_apply(path, expected_id, int(lock_fd))
+        return
     if sys.argv[1:2] == ['_worker']:
         command, path = sys.argv[2:4]
         args = [sys.executable, ENGINE, command] + ([path] if path else [])
@@ -272,8 +329,8 @@ def main():
             review_id = None
     else:
         method = sys.argv[1]
-        path = sys.argv[2] if len(sys.argv) == 3 else None
-        review_id = None
+        path = sys.argv[2] if len(sys.argv) == 3 or method == 'start' and len(sys.argv) == 4 else None
+        review_id = sys.argv[3] if method == 'start' and len(sys.argv) == 4 else None
     print(json.dumps(dispatch(method, path, review_id)))
 
 

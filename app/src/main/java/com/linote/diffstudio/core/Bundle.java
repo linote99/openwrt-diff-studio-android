@@ -19,6 +19,7 @@ public final class Bundle {
     public static final String README = "# OpenWrt differential OTA\n\n"
             + "Web: import update.ota in System > System patches.\n"
             + "Android: open OpenWrt Diff Studio, choose Update device, select update.ota and connect to DEVICE_IP.\n"
+            + "Desktop: use the OpenWrt Diff Studio desktop edition for this device family, or the Python updater below.\n"
             + "Python: python OpenWrt-Updater.py update update.ota --host DEVICE_IP (requires paramiko).\n\n"
             + "网页：系统 → 系统补丁，导入 update.ota。\n"
             + "安卓：打开 OpenWrt Diff Studio → 更新设备，选择 update.ota 后连接设备。\n"
@@ -56,7 +57,8 @@ public final class Bundle {
                     OtaPackage.copy(in, out);
                 }
                 for (String name : files.keySet()) {
-                    try (InputStream in = runtime.open(name); OutputStream out = z.openEntry(name)) {
+                    // Unix 0644 so the Python updater extracts readable on Linux/macOS
+                    try (InputStream in = runtime.open(name); OutputStream out = z.openEntry(name, 0644)) {
                         OtaPackage.copy(in, out);
                     }
                 }
