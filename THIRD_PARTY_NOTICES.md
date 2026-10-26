@@ -1,14 +1,14 @@
 # Third-party notices
 
-The app's own source code is licensed under the MIT License (see `LICENSE`). The components below are not covered by that license and remain under their own terms.
+The app's own source code is licensed under the MIT License (see `LICENSE`). Components below are not covered by that license and remain under their own terms.
 
 ## dissect.extfs (AGPL-3.0)
 
-`app/src/main/java/com/linote/diffstudio/core/Ext4.java` is a Java reimplementation of the ext2/3/4 reading behaviour of [dissect.extfs](https://github.com/fox-it/dissect.extfs), so that patches built on Android match those built by the desktop tool. Dissect is released as open source by Fox-IT, part of NCC Group Plc, and dissect.extfs is licensed under the GNU Affero General Public License v3.0. This file is therefore licensed under the **GNU Affero General Public License v3.0 or later**; the full text is in `LICENSES/AGPL-3.0.txt`. Because the APK contains this file, the APK as a whole is distributed under the AGPL-3.0, and its corresponding source code is this repository at the matching release tag.
+`app/src/main/java/com/linote/diffstudio/core/Ext4.java` is described by this project as a Java reimplementation of the ext2/3/4 reading behaviour of [dissect.extfs](https://github.com/fox-it/dissect.extfs), so patches built on Android match those built by the desktop tool. Dissect is released as open source by Fox-IT, part of NCC Group Plc, and dissect.extfs is licensed under the GNU Affero General Public License v3.0. This file is therefore declared under the **GNU Affero General Public License v3.0 or later**; the full text is in `LICENSES/AGPL-3.0.txt`. The project has previously declared that the APK is distributed under AGPL-3.0 because it contains this component; confirm the applicable licensing and source-distribution obligations before redistribution.
 
 ## OpenWrt Diff Studio desktop files
 
-The files under `app/src/main/assets/ota/` (device-side runtime: `boot.py`, `engine.py`, `rpc.py`, `proxy.sh`, `errors.js`, `unisoc-ota.js`, `unisoc-ota.json`, `lz4raw-aarch64.so`) and `app/src/main/assets/bundle/` (desktop updater `OpenWrt-Updater.py` and `backend/`) are included unchanged from the desktop OpenWrt Diff Studio package (2026-10-21 build). Their SHA-256 fingerprints are recorded in `assets/bundle/files.json`. Copyright in these files belongs to their original author; they are not covered by this repository's MIT License. The app's update workflow, patch format and user interface follow that desktop tool.
+Files under `app/src/main/assets/ota/` (device-side runtime) and `app/src/main/assets/bundle/` (desktop updater and backend) are included from the desktop OpenWrt Diff Studio project, including its 2026-10-26 E5/MU300 update. Their copyright belongs to their original author; they are not covered by this repository's MIT License. The exported updater bundle has family-specific manifests at `app/src/main/assets/bundle/e5/files.json` and `app/src/main/assets/bundle/mu300/files.json`; these list hashes for files in the desktop updater bundle. The manifests do not by themselves state a redistribution license for those assets.
 
 ## JSch (mwiede fork) 0.2.21
 

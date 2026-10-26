@@ -1,13 +1,3 @@
-/*
- * SPDX-License-Identifier: AGPL-3.0-or-later
- *
- * This file reimplements, in Java, the ext2/3/4 reading behaviour of dissect.extfs
- * (https://github.com/fox-it/dissect.extfs, Copyright Fox-IT / NCC Group, AGPL-3.0)
- * so that patches match those produced by the desktop tool. Because it follows that
- * implementation, this file is licensed under the GNU Affero General Public License
- * v3.0 or later (see LICENSES/AGPL-3.0.txt), not under the MIT License that covers the
- * rest of the app's own source code.
- */
 package com.linote.diffstudio.core;
 
 import java.io.Closeable;

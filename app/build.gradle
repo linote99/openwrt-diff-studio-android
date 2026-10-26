@@ -1,7 +1,6 @@
 plugins {
     id 'com.android.application'
 }
-
 // Release signing is read from keystore.properties in the project root (not committed;
 // see keystore.properties.example). Without it, assembleRelease produces an unsigned APK.
 def keystorePropsFile = rootProject.file('keystore.properties')
@@ -9,19 +8,16 @@ def keystoreProps = new Properties()
 if (keystorePropsFile.exists()) {
     keystorePropsFile.withInputStream { keystoreProps.load(it) }
 }
-
 android {
     namespace 'com.linote.diffstudio'
     compileSdk 35
-
     defaultConfig {
         applicationId 'com.linote.diffstudio'
         minSdk 26
         targetSdk 35
-        versionCode 5
-        versionName '1.1.0'
+        versionCode 6
+        versionName '1.1.1'
     }
-
     signingConfigs {
         if (keystorePropsFile.exists()) {
             release {
@@ -32,7 +28,6 @@ android {
             }
         }
     }
-
     buildTypes {
         release {
             minifyEnabled false
@@ -41,29 +36,24 @@ android {
             }
         }
     }
-
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-
     packaging {
         resources {
             excludes += ['META-INF/versions/**', 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA',
                          'META-INF/LICENSE*', 'META-INF/NOTICE*', 'META-INF/DEPENDENCIES']
         }
     }
-
     androidResources {
         // keep every device-side runtime file byte-identical and uncompressed-agnostic
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
     }
-
     testOptions {
         unitTests.returnDefaultValues = true
     }
 }
-
 dependencies {
     implementation 'com.github.mwiede:jsch:0.2.21'
     implementation 'org.bouncycastle:bcprov-jdk18on:1.79'

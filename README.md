@@ -1,73 +1,50 @@
 # OpenWrt Diff Studio（安卓版）
 
-在手机上比较两版 OpenWrt 完整发行包，生成只包含变更文件的差异包，并通过 SSH 直接更新设备。保留配置、额外插件和用户数据。
+在手机上比较两版 OpenWrt 完整发行包，生成差异包，并通过 SSH 更新设备。
 
-> 当前版本：**1.1.0**（versionCode 5），对应电脑版 OpenWrt Diff Studio 2026-10-26（E5 系列版与 MU300 版）。
+> 当前版本：**1.1.1**（versionCode 6）。本版修复应用补丁时传错 ID 的问题：启动设备端更新时传递用户已审核的补丁 ID，而不是随机生成的临时运行目录 ID；仍保留设备端的补丁内容一致性检查。
 
 ## 功能
 
-- **生成差异包**：选择旧版和新版完整发行 ZIP（E5 的 ext4 根文件系统，或 MU300 / F50 / V50 / U30Air 的 tar 根文件系统），分析变更文件、内核与启动镜像、软件包依赖。可以导出完整更新包 ZIP（含 `update.ota`、电脑端更新器和说明），也可以只导出 `.ota`。导出格式与电脑版 OpenWrt Diff Studio 相同。
-- **版本摘要**：分析成功后自动保存新版的版本摘要（`.owrt-index.json`，只含文件清单、软件包版本和校验值）。下次生成差异包时，旧版可以直接选这个摘要，不必再保留旧版完整包。摘要可以在应用内查看、导出给电脑版使用或删除。
-- **更新设备（OpenWrt Updater）**：导入 `.ota`，用 SSH（root + 密码）连接设备，先检查空间、本地修改、依赖和版本，再应用更新。更新时自动显示进度，支持完成后自动重启、手动重启、读取设备状态和回滚结果提示。检查与应用之间会核对设备身份，防止中途换了设备。
-- **适配手机网络**：手机连上“无互联网”的设备 Wi-Fi 时，App 会自动选择能到达设备地址的网络（Wi-Fi、USB 网络共享或以太网）。
-- **长任务不中断**：分析、导出和写入期间使用前台服务并保持唤醒；设备端事务独立运行，关闭 App 也不会中断设备写入。
-- **其他**：中英文界面、深浅色主题、应用内关于页（使用说明与注意事项）；可以在文件管理器中用本应用直接打开 `.ota` 或 `.zip`。
+- **生成差异包**：选择旧版和新版完整发行 ZIP（E5 的 ext4 根文件系统，或 MU300 / F50 / V50 / U30Air 的 tar 根文件系统），分析变更文件、内核与启动镜像、软件包依赖。可导出完整更新包 ZIP（含 `update.ota`、电脑端更新器和说明），也可只导出 `.ota`；格式与电脑版 OpenWrt Diff Studio 相同。
+- **版本摘要**：分析成功后保存新版 `.owrt-index.json` 摘要。下次可直接用摘要代替旧版完整包；摘要可在应用内查看、导出或删除。
+- **更新设备（OpenWrt Updater）**：通过 SSH 连接设备，先检查空间、本地修改、依赖与版本，再应用更新。检查与应用之间会核对设备身份；补丁会以 root 权限写入系统文件。
+- **适配手机网络与长任务**：自动选择能到达设备的 Wi-Fi、USB 网络共享或以太网；分析、导出和写入期间使用前台服务并保持唤醒。
+- 中英文界面、深浅色主题，以及从文件管理器打开 `.ota` 或 `.zip`。
 
-## 系统要求
+## 系统要求与安装
 
 - Android 8.0（API 26）或更高版本。
-- 更新设备时，手机需要和设备在同一网络（连接设备 Wi-Fi 或 USB 网络共享），并知道设备的 root 密码。默认管理地址：E5 为 `192.168.9.1`，MU300 为 `192.168.77.1`；也可以填写 `地址:端口`。
+- 更新设备时，手机须与设备在同一网络，并知道设备的 root 密码。默认管理地址：E5 为 `192.168.9.1`，MU300 为 `192.168.77.1`；也可填写 `地址:端口`。
+- APK 通过 [GitHub Releases](https://github.com/linote99/openwrt-diff-studio-android/releases) 提供。1.1.1 与之前发布版使用相同签名证书，可覆盖升级。
 
-## 安装
+## 使用提示
 
-APK 通过 GitHub Release 附件提供：<https://github.com/linote99/openwrt-diff-studio-android/releases>
+1. 在“生成差异包”页选择设备当前版本（完整 ZIP 或保存的版本摘要）与新版完整 ZIP，点击“分析差异”，确认后导出差异包。
+2. 在“更新设备”页导入 `.ota`，填写设备地址和 root 密码，点击“连接并检查”；检查通过后再确认应用补丁。
 
-下载后按 Android 系统提示安装。各版本使用同一签名，可以直接覆盖升级。
-
-## 使用说明
-
-1. **生成差异包**：在“生成差异包”页选择旧版（设备当前运行的版本，完整 ZIP 或版本摘要）和新版完整 ZIP，点击“分析差异”，确认结果后点击“导出差异包”或“仅导出 .ota 文件”。之前保存的摘要在“已保存的版本摘要”里。
-2. **更新设备**：在“更新设备”页选择 `.ota`，填写设备地址和 root 密码，点击“连接并检查”；全部检查通过后点击“确认应用此补丁”。
-
-注意事项：只导入可信来源的补丁（补丁会以 root 权限写入系统文件）；旧版必须与设备当前运行的版本一致（版本摘要同样要对应设备当前版本，保存摘要不代表设备已更新）；更新期间不要断电或手动重启设备；分析 E5 发行包需要手机有足够的剩余空间（通常几百 MB 以上）。
+只使用可信来源的补丁；旧版必须与设备当前运行版本一致（保存摘要不代表设备已更新）；更新期间不要断电或手动重启设备。分析发行包前请预留足够存储空间。
 
 ## 构建
 
-使用 Android Studio 打开项目，或在命令行运行：
+需要 Android Gradle Plugin 8.7.3、Gradle 8.9（已附 Gradle Wrapper）、JDK 17、compileSdk / targetSdk 35、minSdk 26。
 
-```
+```sh
+./gradlew testDebugUnitTest
 ./gradlew assembleRelease
 ```
 
-项目配置：Android Gradle Plugin 8.7.3、Gradle 8.9（已附 Gradle Wrapper）、Java 17、compileSdk / targetSdk 35、minSdk 26。依赖 JSch 0.2.21（mwiede 分支）和 Bouncy Castle 1.79。
+仓库不包含签名密钥或密码。复制 `keystore.properties.example` 为未提交的 `keystore.properties`，并填入你自己密钥的信息后才会签名；没有该文件时会生成未签名 APK。若要覆盖安装到现有用户设备，必须使用与已发布 APK 相同的私钥。此发行包不提供该私钥。
 
-**签名**：仓库不包含签名密钥。正式签名时，把 `keystore.properties.example` 复制为 `keystore.properties`（已被 `.gitignore` 忽略），填入自己的密钥路径和密码；没有该文件时会生成未签名的 APK（`app-release-unsigned.apk`）。
-
-**换行符**：`app/src/main/assets/` 下的设备端运行时文件有 SHA-256 指纹校验，`.gitattributes` 已禁止对它们做换行符转换，请不要修改这些文件的内容或换行符。
-
-## 工程结构
-
-```
-app/src/main/java/com/linote/diffstudio/
-  MainActivity.java     界面（生成差异包 / 更新设备 / 关于）
-  WorkService.java      前台服务，长任务保活
-  AndroidIo.java        系统文件访问、导出文件名修复、选网连接
-  ErrorExplain.java     错误解释规则
-  core/                 差分协议、发行包解析（ext4 / tar）、差异比较与导出
-  ssh/Remote.java       SSH 设备更新流程（JSch + Bouncy Castle）
-app/src/main/assets/ota/     设备端运行时文件（ota/e5、ota/mu300 下为各机型的差分引擎）
-app/src/main/assets/bundle/  导出完整更新包时附带的电脑端更新器文件（common 为共用文件，e5/mu300 下为各机型的指纹清单）
-```
+`app/src/main/assets/` 中的设备端运行时文件应保持字节不变；导出更新器使用的文件清单位于 `app/src/main/assets/bundle/e5/files.json` 和 `app/src/main/assets/bundle/mu300/files.json`。如改动相关资产，需重新核对清单及兼容性。
 
 ## 许可证
 
-应用自身源码采用 **MIT License**，许可文本见 [`LICENSE`](LICENSE)。以下内容不在 MIT 许可范围内：
+应用自身源码采用 MIT License（见 [`LICENSE`](LICENSE)）。`app/src/main/java/com/linote/diffstudio/core/Ext4.java` 按项目现有声明采用 AGPL-3.0-or-later（见 [`LICENSES/AGPL-3.0.txt`](LICENSES/AGPL-3.0.txt)）。`app/src/main/assets/` 中的桌面工具与设备端文件、JSch、JZlib、jBCrypt、Bouncy Castle 等不属于本项目 MIT 许可范围；详见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) 及各自许可文件。
 
-- `app/src/main/java/com/linote/diffstudio/core/Ext4.java`：按 dissect.extfs 的行为实现，采用 **AGPL-3.0-or-later**（见 [`LICENSES/AGPL-3.0.txt`](LICENSES/AGPL-3.0.txt)）。因为 APK 包含这个文件，发布的 APK 整体按 AGPL-3.0 分发，对应源码即本仓库。
-- `app/src/main/assets/` 下的文件来自电脑版 OpenWrt Diff Studio，版权归其原作者。
-- JSch、Bouncy Castle 等依赖库按各自许可证分发。
+## 1.1.1 测试状态
 
-完整说明见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
+离线测试已通过。已核验发行 APK 的包名、版本号、签名证书与 SHA-256；本版尚未在真实手机或路由器上测试。
 
 ## 链接
 

@@ -336,7 +336,9 @@ public final class Remote {
     public static Map<String, Object> runtimeCall(Client client, Map<String, Object> session, String command, boolean setup) throws IOException, JSchException {
         String home = (String) session.get("runtime");
         String shell;
-        if (setup) {
+        if (setup && "start".equals(command)) {
+            shell = runtimeStartCommand(session);
+        } else if (setup) {
             shell = String.join(" ", q(home + "/busybox"), "sh", q(home + "/bootstrap.sh"), q((String) session.get("path")), q(command), q(home));
         } else {
             shell = "UNISOC_OTA_ROOT=/target UNISOC_OTA_RAM=/ UNISOC_OTA_LIVE=1 PYTHONHOME=/usr " + q(home + "/busybox") + " chroot "
@@ -346,6 +348,24 @@ public final class Remote {
         Map<String, Object> m = Json.map(v);
         if (m == null) throw new OtaException("Unexpected device response");
         return m;
+    }
+
+    /** The bootstrap helper derives its start ID from home; Android's home is intentionally random.
+     *  Re-run the read-only bootstrap inspection, then pass the reviewed patch ID directly to RPC.
+     */
+    static String runtimeStartCommand(Map<String, Object> session) {
+        String home = (String) session.get("runtime");
+        String path = (String) session.get("path");
+        Map<String, Object> check = Json.map(session.get("check"));
+        Object reviewed = check == null ? null : check.get("id");
+        if (home == null || path == null || !(reviewed instanceof String) || !Ota.isHex(reviewed))
+            throw new OtaException("Patch review ID is missing; inspect the patch again");
+        String inspect = String.join(" ", q(home + "/busybox"), "sh", q(home + "/bootstrap.sh"),
+                q(path), "inspect", q(home));
+        return inspect + " >/dev/null && printf '%s\\n' " + q(home + "/root")
+                + " > /etc/unisoc-ota/active-runtime && UNISOC_OTA_ROOT=/target UNISOC_OTA_RAM=/ UNISOC_OTA_LIVE=1 PYTHONHOME=/usr "
+                + q(home + "/busybox") + " chroot " + q(home + "/root")
+                + " /usr/bin/python3 /ota/rpc.py start " + q("/target" + path) + " " + q((String) reviewed);
     }
 
     Map<String, Object> remoteInspect(Client client, File archive) throws IOException, JSchException {
