@@ -36,8 +36,8 @@ def patch_filename(old, new, source):
         stem = safe(stem)
         return 'OpenWrt-patch'+('-'+stem if stem else '')+'.zip'
     models = {'e5':'E5', 't551m':'T551M', 't512n':'T512N', 'm8':'M8',
-              'yuanhang41s':'Yuanhang41S', 'k1':'K1', 'u30air':'U30Air',
-              'mu300':'MU300-F50-V50-U30Air', 'f50':'F50', 'v50':'V50'}
+              'lym10k':'LYM-10K', 'yuanhang41s':'Yuanhang41S', 'k1':'K1', 'u30air':'U30Air',
+              'mu300':'MU300-F50-V50-U30Air', 'u30pro':'U30Pro', 'f50pro':'F50Pro', 'f50':'F50', 'v50':'V50'}
     profile = new.get('profile', '')
     model = models.get(profile, safe(profile, 32) or 'Device')
     version = safe(new.get('openwrt', ''), 24)

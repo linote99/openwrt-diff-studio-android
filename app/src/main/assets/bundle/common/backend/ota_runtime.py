@@ -11,21 +11,10 @@ import sys
 
 
 def support_sources():
-    if getattr(sys, 'frozen', False):
-        folder = Path(sys._MEIPASS)
-    elif Path(__file__).with_name('boot.py').is_file():
-        folder = Path(__file__).parent
-    else:
-        folder = Path(__file__).resolve().parents[2]/'openwrt/luci-app-unisoc-ota/root/usr/lib/unisoc-ota'
-    result = {name:(folder/('ota_engine.py' if name == 'engine.py' and not (folder/name).is_file() else name)).read_bytes().replace(b'\r\n', b'\n') for name in ('engine.py', 'boot.py', 'rpc.py', 'proxy.sh')}
-    plugin = Path(__file__).resolve().parents[2]/'openwrt/luci-app-unisoc-ota'
-    for name, relative in (
-        ('unisoc-ota.js', 'htdocs/luci-static/resources/view/system/unisoc-ota.js'),
-        ('errors.js', 'htdocs/luci-static/resources/unisoc-ota/errors.js'),
-        ('unisoc-ota.json', 'root/usr/share/rpcd/acl.d/unisoc-ota.json')):
-        path = folder/name
-        if not path.is_file(): path = plugin/relative
-        result[name] = path.read_bytes().replace(b'\r\n', b'\n')
+    from .resources import resource
+    result = {name:resource(name).read_bytes().replace(b'\r\n',b'\n')
+              for name in ('engine.py','boot.py','rpc.py','proxy.sh','unisoc-ota.js','errors.js','unisoc-ota.json')}
+    folder = resource('engine.py').parent
     native = folder/'lz4raw-aarch64.so'
     if not native.is_file(): native = Path(__file__).resolve().parents[1]/'ota-native/lz4raw-aarch64.so'
     metadata = native.with_name('build.json')
@@ -79,9 +68,21 @@ def build(release):
 def bootstrap(runtime, busybox):
     """Generated commands refer only to validated paths and content hashes."""
     lines = ['#!/bin/sh', 'set -eu', 'umask 077', 'patch=$1', 'command=$2', 'home=$3',
-             'id=${home#/tmp/unisoc-ota-}',
-             'case "$id" in *[!0-9a-f]*|\'\') exit 2 ;; esac',
-             '[ "$home" != "$id" ] && [ ${#id} -eq 64 ] && [ ! -L "$home" ]',
+             'session=${home#/tmp/unisoc-ota-}',
+             'case "$session" in *[!0-9a-f]*|\'\') exit 2 ;; esac',
+             '[ "$home" != "$session" ] && [ ${#session} -eq 64 ] && [ ! -L "$home" ]',
+             # The RAM directory identifies a session, not the patch. New
+             # controllers pass the reviewed ID explicitly; old callers can
+             # use its content-addressed filename. RPC always rehashes it.
+             'id=${4:-}',
+             'if [ -z "$id" ]; then',
+             ' id=${patch##*/}',
+             ' case "$id" in upload-*.ota) id=${id#upload-}; id=${id%.ota} ;; reviewed-*.ota) id=${id#reviewed-}; id=${id%.ota} ;; *) id= ;; esac',
+             'fi',
+             'if [ "$command" = start ]; then',
+             ' case "$id" in *[!0-9a-f]*|\'\') exit 2 ;; esac',
+             ' [ ${#id} -eq 64 ]',
+             'fi',
              'bb="$home/busybox"', 'root="$home/root"', '"$bb" mkdir -p "$root" "$home/content"',
              # A same-device bind mount is not detectable with st_dev tests.
              # proc mounts is available before entering our RAM chroot; paths

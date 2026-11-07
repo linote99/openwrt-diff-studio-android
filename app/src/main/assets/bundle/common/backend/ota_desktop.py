@@ -1,6 +1,7 @@
 """Diff generator and SSH updater shared by the portable Tauri frontend."""
 import hashlib
 import json
+import re
 from pathlib import Path
 import secrets
 import shlex
@@ -10,29 +11,48 @@ import zipfile
 
 from .ota_engine import Patch, digest
 from .ota_package import analyze
+from .ssh_runtime import connect_ssh
+
+
+def collect(channel, timeout=1800):
+    out, err = bytearray(), bytearray()
+    deadline = time.monotonic() + timeout
+    try:
+        while not channel.exit_status_ready() or channel.recv_ready() or channel.recv_stderr_ready():
+            if channel.recv_ready():out.extend(channel.recv(65536))
+            if channel.recv_stderr_ready():err.extend(channel.recv_stderr(65536))
+            if len(out) + len(err) > 32 << 20:raise ValueError('Device response exceeded limit')
+            if time.monotonic() > deadline:
+                raise TimeoutError('Device operation has not returned; reconnect and check status / 设备操作尚未返回，请重新连接并检查状态')
+            time.sleep(.02)
+        code = channel.recv_exit_status()
+        if code<0:raise ConnectionError('SSH closed before command completion / SSH 在命令完成前已断开')
+        if code:raise RuntimeError(out.decode('utf-8', 'replace') + err.decode('utf-8', 'replace'))
+        return out.decode('utf-8', 'replace')
+    finally:channel.close()
 
 
 def execute(client, command, timeout=1800):
-    channel = client.get_transport().open_session(timeout=20)
-    channel.exec_command(command)
-    out, err = bytearray(), bytearray()
-    deadline = time.monotonic() + timeout
-    while not channel.exit_status_ready() or channel.recv_ready() or channel.recv_stderr_ready():
-        if channel.recv_ready():
-            out.extend(channel.recv(65536))
-        if channel.recv_stderr_ready():
-            err.extend(channel.recv_stderr(65536))
-        if len(out) + len(err) > 32 << 20:
-            channel.close()
-            raise ValueError('Device response exceeded limit')
-        if time.monotonic() > deadline:
-            channel.close()
-            raise TimeoutError('Device update is still running; reconnect and check status')
-        time.sleep(.02)
-    code = channel.recv_exit_status()
-    if code:
-        raise RuntimeError(out.decode('utf-8', 'replace') + err.decode('utf-8', 'replace'))
-    return out.decode('utf-8', 'replace')
+    channel = client.get_transport().open_session(timeout=30)
+    try:
+        channel.settimeout(min(timeout,60))
+        channel.exec_command(command)
+        return collect(channel,timeout)
+    except BaseException:
+        channel.close();raise
+
+
+def send(client,command,blocks,progress=lambda _:None):
+    channel=client.get_transport().open_session(timeout=30)
+    try:
+        channel.settimeout(60)
+        channel.exec_command(command)
+        for block in blocks:
+            channel.sendall(block);progress(len(block))
+        channel.shutdown_write()
+        return collect(channel,120)
+    except BaseException:
+        channel.close();raise
 
 
 def connect(host, password):
@@ -42,8 +62,7 @@ def connect(host, password):
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     try:
-        client.connect(host, username='root', password=password, look_for_keys=False, allow_agent=False,
-                       timeout=15, banner_timeout=15, auth_timeout=15)
+        connect_ssh(client,host,password)
     except BaseException:
         client.close()
         raise
@@ -54,6 +73,12 @@ def remote_prepare(client, archive, emit=lambda *_: None):
     with Patch(archive) as patch:
         if not patch.manifest.get('runtime'):
             raise ValueError('This patch does not contain a portable updater runtime')
+        from .ota_runtime import bootstrap
+        # The controller owns the SSH admission handoff. Reconstruct its small
+        # shell entry from the verified manifest, including for existing OTA
+        # archives whose packaged entry confuses a session nonce with Patch.id.
+        # Do not alter the OTA archive, its engine, blobs or review checks.
+        entry = bootstrap(patch.manifest['runtime'], patch.manifest['busybox'])
         # Only mkdir/cat/chmod and shell builtins are needed to upload the first
         # static executable over SSH (old Dropbear may have no SFTP server).
         # All subsequent filesystem/hash/space operations use that executable.
@@ -62,16 +87,14 @@ def remote_prepare(client, archive, emit=lambda *_: None):
         bb = shlex.quote(runtime+'/busybox')
         for key, name in (('busybox', 'busybox'), ('bootstrap', 'bootstrap.sh')):
             desc = patch.manifest[key]
-            content = patch.archive.read('blobs/'+desc['sha256'])
-            channel = client.get_transport().open_session(timeout=20)
+            content = patch.archive.read('blobs/'+desc['sha256']) if key == 'busybox' else entry
+            expected = desc['sha256'] if key == 'busybox' else hashlib.sha256(content).hexdigest()
             cat = 'cat' if key == 'busybox' else bb+' cat'
-            channel.exec_command('umask 077; '+cat+' > '+shlex.quote(runtime+'/'+name))
-            channel.sendall(content); channel.shutdown_write()
-            if channel.recv_exit_status() != 0: raise ValueError('Runtime helper upload failed')
+            send(client,'umask 077; '+cat+' > '+shlex.quote(runtime+'/'+name),[content])
             if key == 'busybox':
                 execute(client, 'chmod 700 '+shlex.quote(runtime+'/busybox'))
             got = execute(client, bb+' sha256sum '+shlex.quote(runtime+'/'+name)).split()[0]
-            if got != desc['sha256']: raise ValueError('Runtime helper checksum mismatch')
+            if got != expected: raise ValueError('Runtime helper checksum mismatch')
         available = set(execute(client, bb+' --list').splitlines())
         required = {'sh', 'cat', 'chmod', 'mkdir', 'df', 'sha256sum', 'mv',
                     'unzip', 'cp', 'ln', 'rm', 'mount', 'chroot', 'reboot'}
@@ -84,19 +107,16 @@ def remote_prepare(client, archive, emit=lambda *_: None):
         if total + (32 << 20) > free:
             raise ValueError('Insufficient device staging space')
         execute(client, 'umask 077; '+bb+' mkdir -p /etc/unisoc-ota')
-        channel = client.get_transport().open_session(timeout=20)
-        channel.exec_command('umask 077; '+bb+' cat > ' + shlex.quote(destination + '.new'))
         sent = 0
         with Path(archive).open('rb') as stream:
             expected = digest(stream)
             stream.seek(0)
-            for block in iter(lambda: stream.read(128 << 10), b''):
-                channel.sendall(block)
-                sent += len(block)
+            def progress(count):
+                nonlocal sent
+                sent += count
                 emit('ota_progress', dict(stage='upload', done=sent, total=total))
-        channel.shutdown_write()
-        if channel.recv_exit_status() != 0:
-            raise ValueError('Device upload failed')
+            send(client,'umask 077; '+bb+' cat > '+shlex.quote(destination+'.new'),
+                 iter(lambda:stream.read(128<<10),b''),progress)
         got = execute(client, bb+' sha256sum ' + shlex.quote(destination + '.new')).split()[0]
         if got != expected:
             raise ValueError('Device upload checksum mismatch')
@@ -107,7 +127,13 @@ def remote_prepare(client, archive, emit=lambda *_: None):
 def runtime_call(client, session, command, setup=False):
     home = session['runtime']
     if setup:
-        shell = ' '.join(map(shlex.quote, [home+'/busybox', 'sh', home+'/bootstrap.sh', session['path'], command, home]))
+        args=[home+'/busybox', 'sh', home+'/bootstrap.sh', session['path'], command, home]
+        if command=='start':
+            reviewed=(session.get('check') or {}).get('id')
+            if not isinstance(reviewed,str) or not re.fullmatch('[a-f0-9]{64}',reviewed):
+                raise ValueError('Review this patch before applying / 请先检查此补丁再应用')
+            args.append(reviewed)
+        shell = ' '.join(map(shlex.quote,args))
     else:
         shell = 'UNISOC_OTA_ROOT=/target UNISOC_OTA_RAM=/ UNISOC_OTA_LIVE=1 PYTHONHOME=/usr '+shlex.quote(home+'/busybox')+' chroot '+shlex.quote(home+'/root')+' /usr/bin/python3 /ota/rpc.py '+shlex.quote(command)
     return json.loads(execute(client, shell))
@@ -174,7 +200,10 @@ class Desktop:
                         result = analyze(self.analysis['old'], self.analysis['new'], patch, self.progress, index_directory=self.index_directory)
                         self.index_path = result.get('index_path')
                         from .ota_bundle import export_bundle
-                        export_bundle(patch, p['output'], self.root)
+                        from . import host
+                        if host.current() is not None:
+                            host.current().export_bundle(patch,p['output'],self.analysis['new'])
+                        else:export_bundle(patch, p['output'], self.root)
                         result['output'] = p['output']
                     return result
                 result = analyze(self.analysis['old'], self.analysis['new'],
@@ -182,10 +211,11 @@ class Desktop:
                 self.index_path = result.get('index_path')
                 return result
             if command == 'ota_package':
+                self.review = None
+                self.archive_path = None
                 archive = Path(p.get('path') or self.root / 'update.ota')
                 with Patch(archive) as patch:
                     self.archive_path = archive
-                    self.review = None
                     return dict(path=str(archive), id=patch.id, manifest=patch.manifest)
             if command == 'ota_probe':
                 self.review = None

@@ -70,8 +70,9 @@ public final class OtaPackage {
             return "OpenWrt-patch" + (stem.isEmpty() ? "" : "-" + stem) + ".zip";
         }
         Map<String, String> models = new LinkedHashMap<>();
-        String[] kv = {"e5", "E5", "t551m", "T551M", "t512n", "T512N", "m8", "M8", "yuanhang41s", "Yuanhang41S", "k1", "K1",
-                "u30air", "U30Air", "mu300", "MU300-F50-V50-U30Air", "f50", "F50", "v50", "V50"};
+        String[] kv = {"e5", "E5", "t551m", "T551M", "t512n", "T512N", "m8", "M8", "lym10k", "LYM-10K",
+                "yuanhang41s", "Yuanhang41S", "k1", "K1", "u30air", "U30Air", "mu300", "MU300-F50-V50-U30Air",
+                "u30pro", "U30Pro", "f50pro", "F50Pro", "f50", "F50", "v50", "V50"};
         for (int i = 0; i < kv.length; i += 2) models.put(kv[i], kv[i + 1]);
         String profile = String.valueOf(neu.getOrDefault("profile", ""));
         String model = models.get(profile);

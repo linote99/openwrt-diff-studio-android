@@ -1,5 +1,11 @@
 # 更新日志
 
+## 1.1.2（versionCode 7，已发布）
+- 同步与 Diff Studio 源快照哈希一致的共享后端更新文件，加入 `host.py`、`resources.py`、`ssh_runtime.py` 所需依赖，并更新 E5 / MU300 导出清单。
+- Android 文件名映射新增 `F50Pro`、`U30Pro`、`LYM-10K`；生成的 OTA bootstrap 将临时运行目录 session ID 与审核后的补丁 ID 分开处理。
+- 压缩包中桌面侧 `backend/ota_engine.py` 实际 SHA-256 与 `diff-tool.json` 记录不符，因此未导入该未验证源码；Android 导出仍按机型映射到仓库中已验证的 `ota/e5/engine.py` / `ota/mu300/engine.py`。没有运行压缩包中的脚本或二进制。
+- 单元测试、Debug 构建及 E5 / MU300 各 18 项导出资源哈希核对均通过。发布 APK 使用 Android 标准 debug 签名，不能覆盖安装到 1.1.1 及更早的正式签名版；本版尚未在真实手机或路由器上测试。
+
 ## 1.1.1（versionCode 6）
 - 修复应用补丁时传入错误 ID 的问题：Android 端启动更新时将已审核的 patch ID 传给设备端 RPC，而不再使用随机临时运行目录 ID。
 - 启动时仍重新执行只读检查，设备端仍验证补丁内容一致性；没有移除或放宽该校验。
