@@ -56,7 +56,7 @@ public enum CRC32 {
 /// with `feed`, pull uncompressed bytes with `decode`.
 public final class RawInflater {
     #if canImport(Compression)
-    private var stream = compression_stream(dst_ptr: nil, dst_size: 0, src_ptr: nil, src_size: 0, state: nil)
+    private var stream: compression_stream
     private var initialized = false
     private var finished = false
     #elseif canImport(CZlib)
@@ -67,7 +67,7 @@ public final class RawInflater {
 
     public init() {
         #if canImport(Compression)
-        var s = compression_stream(dst_ptr: nil, dst_size: 0, src_ptr: nil, src_size: 0, state: nil)
+        var s = compression_stream()
         let status = compression_stream_init(&s, COMPRESSION_STREAM_DECODE, COMPRESSION_ZLIB)
         guard status == COMPRESSION_STATUS_OK else { fatalError("compression_stream_init failed") }
         stream = s
