@@ -10,7 +10,7 @@ public struct AboutView: View {
     public init() {}
 
     private var version: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.1.2"
+        Foundation.Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.1.2"
     }
 
     private struct Item {

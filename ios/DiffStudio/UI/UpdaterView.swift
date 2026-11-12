@@ -80,7 +80,7 @@ public struct UpdaterView: View {
             }
         }
         .fileImporter(isPresented: $pickingPatch, allowedContentTypes: [.ota]) { result in
-            if case .success(let urls) = result, let url = urls.first {
+            if case .success(let url) = result {
                 state.choose(kind: "patch", url: url, name: url.lastPathComponent)
             }
         }

@@ -24,6 +24,11 @@ import UniformTypeIdentifiers
 /// runs on a serial background queue and only touches @Published
 /// state through `Task { @MainActor in ... }` (see run()).
 public final class AppState: ObservableObject {
+    // Assigned once during initialization and read only to dispatch onto MainActor.
+    private final class RemoteEventTarget: @unchecked Sendable {
+        weak var appState: AppState?
+    }
+
     public static let defaultE5 = "192.168.9.1"
     public static let defaultMU300 = "192.168.77.1"
 
@@ -84,11 +89,11 @@ public final class AppState: ObservableObject {
     @Published public var confirmRebootAlert = false
     @Published public var indexActionSheet: URL?
 
-    public struct ExportRequest: Identifiable {
+    public struct ExportRequest: Identifiable, Equatable {
         public let id = UUID()
         public let kind: Kind
         public let suggestedName: String
-        public enum Kind { case bundleZip, otaOnly, index(URL) }
+        public enum Kind: Equatable { case bundleZip, otaOnly, index(URL) }
     }
 
     public let remote: Remote
@@ -101,9 +106,11 @@ public final class AppState: ObservableObject {
     public init() {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         try? FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
-        self.remote = Remote(root: support) { [weak self] data in
-            Task { @MainActor in self?.onRemoteProgress(data) }
+        let eventTarget = RemoteEventTarget()
+        self.remote = Remote(root: support) { data in
+            Task { @MainActor in eventTarget.appState?.onRemoteProgress(data) }
         }
+        eventTarget.appState = self
         // Restore the host default preference from the previous run.
         if let savedHost = UserDefaults.standard.string(forKey: "host"), !savedHost.isEmpty {
             host = savedHost
@@ -248,7 +255,7 @@ public final class AppState: ObservableObject {
                 throw OtaError("Unsupported device family: \(family)")
             }
             let asset = name == "engine.py" ? "ota/\(family)/engine.py" : "ota/\(name)"
-            guard let base = Bundle.main.resourceURL?.appendingPathComponent("Assets"),
+            guard let base = Foundation.Bundle.main.resourceURL?.appendingPathComponent("Assets"),
                   let data = try? Data(contentsOf: base.appendingPathComponent(asset)) else {
                 throw OtaError("Missing support file: \(asset)")
             }
@@ -268,7 +275,7 @@ public final class AppState: ObservableObject {
             if name == "files.json" { asset = "bundle/\(family)/files.json" }
             else if name == "backend/ota_engine.py" { asset = "ota/\(family)/engine.py" }
             else { asset = "bundle/common/\(name)" }
-            guard let base = Bundle.main.resourceURL?.appendingPathComponent("Assets"),
+            guard let base = Foundation.Bundle.main.resourceURL?.appendingPathComponent("Assets"),
                   let stream = InputStream(url: base.appendingPathComponent(asset)) else {
                 throw OtaError("Missing or unsafe native runtime file")
             }

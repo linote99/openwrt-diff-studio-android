@@ -87,11 +87,15 @@
 			isa = PBXBuildFile;
 			fileRef = 0CF5BA5A05614D8196D8FEB5;
 		};
-		A2D1C12D2182EBA6512BB418 = {
-			isa = PBXBuildFile;
-			productRef = A329455080F39669B95A7611;
-		};
-		A3834DD4CDD0E1C8580A138A = {
+			A2D1C12D2182EBA6512BB418 = {
+				isa = PBXBuildFile;
+				productRef = A329455080F39669B95A7611;
+			};
+			B1E8B3C31FA453D3B270E6A1 = {
+				isa = PBXBuildFile;
+				productRef = C4A91D2B3E78F5A6C0D9412B;
+			};
+			A3834DD4CDD0E1C8580A138A = {
 			isa = PBXBuildFile;
 			fileRef = AD202E8BFC4C87CF9DBDE5D7;
 		};
@@ -400,11 +404,11 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		54AB89D79F92BD2966E41BD8 = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = ( 8A4B40934494E5714F441D87 );
-			runOnlyForDeploymentPostprocessing = 0;
+			54AB89D79F92BD2966E41BD8 = {
+				isa = PBXFrameworksBuildPhase;
+				buildActionMask = 2147483647;
+				files = ( 8A4B40934494E5714F441D87, B1E8B3C31FA453D3B270E6A1 );
+				runOnlyForDeploymentPostprocessing = 0;
 		};
 		6EFAB1ECC0D092E20FE51FCD = {
 			isa = PBXFrameworksBuildPhase;
@@ -477,11 +481,11 @@
 			buildPhases = ( 4821909E9BF9E73E471FEA84, 6EFAB1ECC0D092E20FE51FCD, F667297ED3AB90EAC07798D4 );
 			buildRules = ( );
 			dependencies = (  );
-			name = "DiffStudio";
-			productName = "DiffStudio";
-			productReference = 63BB5981DC80AA984FEC7C00;
-			productType = "com.apple.product-type.application";
-			packageProductDependencies = ( A329455080F39669B95A7611 );
+				name = "DiffStudio";
+				productName = "DiffStudio";
+				productReference = 63BB5981DC80AA984FEC7C00;
+				productType = "com.apple.product-type.application";
+				packageProductDependencies = ( A329455080F39669B95A7611, C4A91D2B3E78F5A6C0D9412B );
 		};
 		86627BFE99A6FD04C61F4336 = {
 			isa = PBXNativeTarget;
@@ -507,7 +511,7 @@
 			hasScannedForEncodings = "0";
 			knownRegions = ( en, "zh-Hans", Base, );
 			mainGroup = BB5D8E872B7D45C0EFD70B64;
-			packageReferences = ( B583F1E72BB4B30AD4DC5ACB );
+			packageReferences = ( B583F1E72BB4B30AD4DC5ACB, F7C2D4A11B609E83A2F75C4D );
 			productRefGroup = 2F3A6B1E78F896718625FF06;
 			projectDirPath = "";
 			projectRoot = "";
@@ -666,12 +670,13 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.1.2;
-				CURRENT_PROJECT_VERSION = 7;
-				PRODUCT_BUNDLE_IDENTIFIER = com.linote.diffstudio;
-				PRODUCT_NAME = DiffStudio;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				ENABLE_PREVIEWS = YES;
+					CURRENT_PROJECT_VERSION = 7;
+					PRODUCT_BUNDLE_IDENTIFIER = com.linote.diffstudio;
+					PRODUCT_NAME = DiffStudio;
+					ENABLE_TESTABILITY = YES;
+					SWIFT_VERSION = 5.0;
+					TARGETED_DEVICE_FAMILY = "1,2";
+					ENABLE_PREVIEWS = YES;
 			};
 			name = "Debug";
 		};
@@ -722,15 +727,25 @@
 			repositoryURL = "https://github.com/apple/swift-nio-ssh";
 			requirement = { kind = upToNextMinorVersion; minimumVersion = 0.12.0; };
 		};
-/* End XCRemoteSwiftPackageReference section */
+		F7C2D4A11B609E83A2F75C4D = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-nio.git";
+			requirement = { kind = exactVersion; version = 2.105.0; };
+		};
+	/* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		A329455080F39669B95A7611 = {
+			A329455080F39669B95A7611 = {
+				isa = XCSwiftPackageProductDependency;
+				package = B583F1E72BB4B30AD4DC5ACB;
+				productName = "NIOSSH";
+			};
+		C4A91D2B3E78F5A6C0D9412B = {
 			isa = XCSwiftPackageProductDependency;
-			package = B583F1E72BB4B30AD4DC5ACB;
-			productName = "NIOSSH";
+			package = F7C2D4A11B609E83A2F75C4D;
+			productName = "NIOPosix";
 		};
-/* End XCSwiftPackageProductDependency section */
+	/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 46F86FAA6BBF9AC94A7E4595;
 }

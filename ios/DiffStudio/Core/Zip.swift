@@ -56,8 +56,6 @@ public enum CRC32 {
 /// with `feed`, pull uncompressed bytes with `decode`.
 public final class RawInflater {
     #if canImport(Compression)
-    private var stream: compression_stream
-    private var initialized = false
     private var finished = false
     #elseif canImport(CZlib)
     private var strm = z_stream()
@@ -67,11 +65,8 @@ public final class RawInflater {
 
     public init() {
         #if canImport(Compression)
-        var s = compression_stream()
-        let status = compression_stream_init(&s, COMPRESSION_STREAM_DECODE, COMPRESSION_ZLIB)
-        guard status == COMPRESSION_STATUS_OK else { fatalError("compression_stream_init failed") }
-        stream = s
-        initialized = true
+        // Apple platforms decode ZIP entries through InflatePure below.
+        finished = false
         #elseif canImport(CZlib)
         strm.zalloc = nil; strm.zfree = nil; strm.opaque = nil
         let rc = inflateInit2_(&strm, -15, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size))
@@ -80,13 +75,11 @@ public final class RawInflater {
         #endif
     }
 
+    #if canImport(CZlib)
     deinit {
-        #if canImport(Compression)
-        if initialized { compression_stream_destroy(&stream) }
-        #elseif canImport(CZlib)
         if initialized { inflateEnd(&strm) }
-        #endif
     }
+    #endif
 
     public var isFinished: Bool {
         #if canImport(Compression)

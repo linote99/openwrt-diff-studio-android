@@ -5,6 +5,20 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+// SwiftUI's fileExporter requires a FileDocument to present the save picker.
+// AppState replaces this empty placeholder with the generated file on completion.
+private struct ExportPlaceholderDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.data, .zip, .json, .ota] }
+    static var writableContentTypes: [UTType] { readableContentTypes }
+
+    init() {}
+    init(configuration: ReadConfiguration) throws {}
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: Data())
+    }
+}
+
 public struct ContentView: View {
     @EnvironmentObject private var state: AppState
     @State private var exportPresented = false
@@ -49,6 +63,7 @@ public struct ContentView: View {
             )
         }
         .fileExporter(isPresented: $exportPresented,
+                      document: ExportPlaceholderDocument(),
                       contentType: exportContentType,
                       defaultFilename: exportName) { result in
             if case .success(let url) = result {

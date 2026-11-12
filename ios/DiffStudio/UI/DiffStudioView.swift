@@ -89,12 +89,12 @@ public struct DiffStudioView: View {
             }
         }
         .fileImporter(isPresented: $pickingOld, allowedContentTypes: [.zip, .json]) { result in
-            if case .success(let urls) = result, let url = urls.first {
+            if case .success(let url) = result {
                 state.choose(kind: "old", url: url, name: url.lastPathComponent)
             }
         }
         .fileImporter(isPresented: $pickingNew, allowedContentTypes: [.zip]) { result in
-            if case .success(let urls) = result, let url = urls.first {
+            if case .success(let url) = result {
                 state.choose(kind: "new", url: url, name: url.lastPathComponent)
             }
         }

@@ -10,13 +10,13 @@
 import Foundation
 
 public enum Strings {
-    public static func bundle(forEnglish english: Bool) -> Bundle {
+    public static func bundle(forEnglish english: Bool) -> Foundation.Bundle {
         let lang = english ? "en" : "zh-Hans"
-        if let path = Bundle.main.path(forResource: lang, ofType: "lproj"),
-           let bundle = Bundle(path: path) {
+        if let path = Foundation.Bundle.main.path(forResource: lang, ofType: "lproj"),
+           let bundle = Foundation.Bundle(path: path) {
             return bundle
         }
-        return .main
+        return Foundation.Bundle.main
     }
 
     public static func localized(_ key: String, english: Bool) -> String {
