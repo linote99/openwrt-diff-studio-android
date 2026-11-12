@@ -56,7 +56,7 @@ public enum CRC32 {
 /// with `feed`, pull uncompressed bytes with `decode`.
 public final class RawInflater {
     #if canImport(Compression)
-    private var stream = compression_stream()
+    private var stream = compression_stream(dst_ptr: nil, dst_size: 0, src_ptr: nil, src_size: 0, state: nil)
     private var initialized = false
     private var finished = false
     #elseif canImport(CZlib)
@@ -67,7 +67,7 @@ public final class RawInflater {
 
     public init() {
         #if canImport(Compression)
-        var s = compression_stream()
+        var s = compression_stream(dst_ptr: nil, dst_size: 0, src_ptr: nil, src_size: 0, state: nil)
         let status = compression_stream_init(&s, COMPRESSION_STREAM_DECODE, COMPRESSION_ZLIB)
         guard status == COMPRESSION_STATUS_OK else { fatalError("compression_stream_init failed") }
         stream = s
@@ -1001,7 +1001,7 @@ private final class ZipEntryOutputStream: OutputStream {
     private weak var zip: ZipOut?
     private var closed = false
     init(zip: ZipOut) { self.zip = zip; super.init(toMemory: ()) }
-    required init(toMemory: ()) { super.init(toMemory: ()) }
+    required override init(toMemory: ()) { super.init(toMemory: ()) }
     override func write(_ buffer: UnsafePointer<UInt8>, maxLength len: Int) -> Int {
         guard len > 0 else { return 0 }
         do {

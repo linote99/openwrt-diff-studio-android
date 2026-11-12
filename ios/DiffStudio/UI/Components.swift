@@ -48,17 +48,17 @@ public struct StatView: View {
 
 public struct DetailsView: View {
     public let summary: String
-    public let body: String
+    public let detailText: String
     @State private var open = false
     public init(summary: String, body: String) {
         self.summary = summary
-        self.body = body
+        self.detailText = body
     }
 
     public var body: some View {
         DisclosureGroup(isExpanded: $open) {
             ScrollView(.horizontal, showsIndicators: false) {
-                Text(body)
+                Text(detailText)
                     .font(.system(size: 12, design: .monospaced))
                     .textSelection(.enabled)
                     .padding(10)
