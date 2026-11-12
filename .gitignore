@@ -21,3 +21,12 @@ keystore.properties
 # OS files
 .DS_Store
 Thumbs.db
+
+# Xcode / iOS build products
+DerivedData/
+ios/build/
+ios/DerivedData/
+ios/Payload/
+*.ipa
+*.xcuserstate
+xcuserdata/

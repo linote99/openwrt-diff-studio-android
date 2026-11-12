@@ -1,0 +1,74 @@
+# Build unsigned IPA from the iOS project in ios/.
+# The IPA is unsigned and must be self-signed before installation.
+name: Build unsigned iOS IPA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/build-ipa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: |
+          xcodebuild -version
+          xcode-select -p
+
+      - name: Run tests (iOS Simulator)
+        run: |
+          xcodebuild test \
+            -project ios/DiffStudio.xcodeproj \
+            -scheme DiffStudio \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Archive (unsigned)
+        run: |
+          xcodebuild -project ios/DiffStudio.xcodeproj \
+            -scheme DiffStudio \
+            -destination 'generic/platform=iOS' \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            archive -archivePath ios/build/DiffStudio.xcarchive
+
+      - name: Verify archive
+        run: |
+          ls -la ios/build/DiffStudio.xcarchive/Products/Applications/
+          test -x ios/build/DiffStudio.xcarchive/Products/Applications/DiffStudio.app/DiffStudio
+          test -d ios/build/DiffStudio.xcarchive/Products/Applications/DiffStudio.app/Assets
+          ls ios/build/DiffStudio.xcarchive/Products/Applications/DiffStudio.app/Assets/ota
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p ios/Payload
+          cp -r ios/build/DiffStudio.xcarchive/Products/Applications/DiffStudio.app ios/Payload/
+          (cd ios && zip -r -y DiffStudio-unsigned.ipa Payload)
+          rm -rf ios/Payload
+
+      - name: Verify IPA contents
+        run: |
+          unzip -l ios/DiffStudio-unsigned.ipa
+          unzip -p ios/DiffStudio-unsigned.ipa 'Payload/DiffStudio.app/DiffStudio' > /dev/null
+          unzip -p ios/DiffStudio-unsigned.ipa 'Payload/DiffStudio.app/Assets/ota/e5/engine.py' > /dev/null
+          unzip -p ios/DiffStudio-unsigned.ipa 'Payload/DiffStudio.app/Assets/bundle/e5/files.json' > /dev/null
+          unzip -p ios/DiffStudio-unsigned.ipa 'Payload/DiffStudio.app/Info.plist' > /dev/null
+          echo "IPA verified: binary + Assets present; unsigned"
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: DiffStudio-unsigned
+          path: ios/DiffStudio-unsigned.ipa
+          if-no-files-found: error

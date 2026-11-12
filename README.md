@@ -1,4 +1,4 @@
-# OpenWrt Diff Studio（安卓版）
+# OpenWrt Diff Studio（Android 与 iOS）
 
 在手机上比较两版 OpenWrt 完整发行包，生成差异包，并通过 SSH 更新设备。
 
@@ -38,6 +38,12 @@
 仓库不包含签名密钥或密码。复制 `keystore.properties.example` 为未提交的 `keystore.properties`，并填入你自己密钥的信息后才会签名；没有该文件时会生成未签名 APK。若要覆盖安装到现有用户设备，必须使用与已发布 APK 相同的私钥。此发行包不提供该私钥。
 
 `app/src/main/assets/` 中的设备端运行时文件应保持字节不变；导出更新器使用的文件清单位于 `app/src/main/assets/bundle/e5/files.json` 和 `app/src/main/assets/bundle/mu300/files.json`。如改动相关资产，需重新核对清单及兼容性。
+
+## iOS 版本
+
+iOS 工程位于 [`ios/`](ios/)，Xcode 项目为 [`ios/DiffStudio.xcodeproj`](ios/DiffStudio.xcodeproj)，构建与测试说明见 [iOS README](ios/README-iOS.md)。根目录的 [GitHub Actions workflow](.github/workflows/build-ipa.yml) 会在 iOS 文件变更推送到 `main` 时运行，也可手动触发；成功后在 Actions run 的 Artifacts 中下载 `DiffStudio-unsigned`。
+
+Actions 生成的 IPA **未签名，不能直接安装**；需先用 AltStore 或 Sideloadly 自签。Android 工程仍位于仓库根目录，iOS 工程与 Android 文件分开放置。
 
 ## 许可证
 
